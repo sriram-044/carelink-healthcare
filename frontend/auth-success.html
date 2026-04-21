@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareLink — Signing you in...</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-base);
+      flex-direction: column;
+      gap: 20px;
+    }
+    .spinner {
+      width: 56px;
+      height: 56px;
+      border: 4px solid rgba(0,212,170,0.15);
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .auth-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+    }
+    .auth-sub {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <div class="auth-title">Signing you in with Google...</div>
+  <div class="auth-sub" id="authStatus">Please wait a moment ✨</div>
+
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      const userRaw = params.get('user');
+      const error = params.get('error');
+
+      if (error || !token || !userRaw) {
+        document.getElementById('authStatus').textContent = '❌ Google sign-in failed. Redirecting...';
+        setTimeout(() => window.location.href = '/?error=1', 2000);
+        return;
+      }
+
+      try {
+        const user = JSON.parse(decodeURIComponent(userRaw));
+        localStorage.setItem('carelink_token', token);
+        localStorage.setItem('carelink_user', JSON.stringify(user));
+
+        document.getElementById('authStatus').textContent = `✅ Welcome, ${user.name}! Redirecting...`;
+
+        setTimeout(() => {
+          const role = user.role;
+          if (role === 'patient')     window.location.href = 'patient.html';
+          else if (role === 'doctor') window.location.href = 'doctor.html';
+          else if (role === 'admin')  window.location.href = 'admin.html';
+          else if (role === 'lab')    window.location.href = 'lab.html';
+          else                        window.location.href = '/';
+        }, 800);
+      } catch (e) {
+        document.getElementById('authStatus').textContent = '❌ Something went wrong. Redirecting...';
+        setTimeout(() => window.location.href = '/', 2000);
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareLink — Admin Portal</title>
+  <meta name="description" content="CareLink Admin Portal: Manage users, doctors, reports, analytics and system settings." />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">🛡️</div>
+        <div>
+          <div class="logo-text">CareLink</div>
+          <div class="logo-subtitle">Admin Portal</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Overview</div>
+        <a class="nav-item active" id="navDashboard" href="#" onclick="showSection('dashboard', this)">
+          <span class="nav-icon">📊</span> Dashboard
+        </a>
+        <a class="nav-item" id="navAnalytics" href="#" onclick="showSection('analytics', this)">
+          <span class="nav-icon">📈</span> Analytics
+        </a>
+        <div class="nav-section-label">Management</div>
+        <a class="nav-item" id="navPatients" href="#" onclick="showSection('patients', this)">
+          <span class="nav-icon">🧑‍🦽</span> Patients
+        </a>
+        <a class="nav-item" id="navDoctors" href="#" onclick="showSection('doctors', this)">
+          <span class="nav-icon">🩺</span> Doctors
+        </a>
+        <a class="nav-item" id="navAssign" href="#" onclick="showSection('assign', this)">
+          <span class="nav-icon">🔗</span> Assign Doctor
+        </a>
+        <div class="nav-section-label">Records</div>
+        <a class="nav-item" id="navReports" href="#" onclick="showSection('reports', this)">
+          <span class="nav-icon">📋</span> Lab Reports
+        </a>
+        <a class="nav-item" id="navAlerts" href="#" onclick="showSection('alerts', this)">
+          <span class="nav-icon">🔔</span> All Alerts
+          <span class="nav-badge" id="alertNavBadge" style="display:none">0</span>
+        </a>
+        <div class="nav-section-label">System</div>
+        <a class="nav-item" id="navSettings" href="#" onclick="showSection('settings', this)">
+          <span class="nav-icon">⚙️</span> Settings
+        </a>
+      </nav>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="sidebarAvatar">A</div>
+        <div class="user-info">
+          <div class="user-name" id="sidebarName">Admin</div>
+          <div class="user-role" id="sidebarRole">admin</div>
+        </div>
+        <button class="logout-btn" onclick="logout()">⏻</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title" id="pageTitle">Admin Dashboard</div>
+          <div class="topbar-subtitle" id="pageSubtitle">System-wide overview</div>
+        </div>
+        <div class="topbar-right">
+          <button class="btn btn-primary btn-sm" onclick="openCreateUserModal()">+ Add User</button>
+          <div id="currentDateTime" style="font-size:13px;color:var(--text-muted)"></div>
+        </div>
+      </div>
+
+      <div class="page-content">
+
+        <!-- DASHBOARD -->
+        <section id="section-dashboard">
+          <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+            <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--primary),var(--secondary));--card-text:var(--primary);--card-icon-bg:rgba(0,212,170,0.12)">
+              <div class="stat-icon">🧑‍🦽</div>
+              <div class="stat-value" id="statPatients">—</div>
+              <div class="stat-label">Total Patients</div>
+            </div>
+            <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--secondary),#a29bfe);--card-text:var(--secondary);--card-icon-bg:rgba(108,99,255,0.12)">
+              <div class="stat-icon">🩺</div>
+              <div class="stat-value" id="statDoctors" style="color:var(--secondary)">—</div>
+              <div class="stat-label">Total Doctors</div>
+            </div>
+            <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--danger),#c0392b);--card-text:var(--danger);--card-icon-bg:rgba(255,71,87,0.12)">
+              <div class="stat-icon">🔔</div>
+              <div class="stat-value" id="statAlerts" style="color:var(--danger)">—</div>
+              <div class="stat-label">Active Alerts</div>
+            </div>
+            <div class="stat-card" style="--card-accent:linear-gradient(90deg,#fdcb6e,#e17055);--card-text:#fdcb6e;--card-icon-bg:rgba(253,203,110,0.12)">
+              <div class="stat-icon">🚩</div>
+              <div class="stat-value" id="statFlagged" style="color:#fdcb6e">—</div>
+              <div class="stat-label">Flagged Reports</div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="gap:20px">
+            <div class="card">
+              <div class="card-title" style="margin-bottom:16px">👥 Recent Users</div>
+              <div id="recentUsers"><div class="loading-spinner"></div></div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="margin-bottom:16px">🔔 Active Alerts</div>
+              <div class="alert-feed" id="adminDashAlerts"><div class="loading-spinner"></div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ANALYTICS -->
+        <section id="section-analytics" class="hidden">
+          <div class="grid-2" style="gap:20px">
+            <div class="card">
+              <div class="card-title" style="margin-bottom:16px">📊 Vitals Status Distribution</div>
+              <div class="chart-container"><canvas id="vitalsDistChart"></canvas></div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="margin-bottom:16px">📋 Report Status Distribution</div>
+              <div class="chart-container"><canvas id="reportDistChart"></canvas></div>
+            </div>
+            <div class="card col-span-2">
+              <div class="card-title" style="margin-bottom:16px">📈 System Stats</div>
+              <div id="analyticsStats" class="grid-4" style="gap:14px"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- PATIENTS -->
+        <section id="section-patients" class="hidden">
+          <div class="card" style="margin-bottom:16px">
+            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+              <input type="text" class="form-input" id="patientSearch" placeholder="🔍 Search patients..." oninput="filterTable('patientsTable', this.value)" style="max-width:280px" />
+              <button class="btn btn-primary btn-sm" onclick="openCreateUserModal('patient')">+ Add Patient</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th><th>Email</th><th>Age</th><th>Blood Group</th>
+                    <th>Assigned Doctor</th><th>Joined</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="patientsTable"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted)">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- DOCTORS -->
+        <section id="section-doctors" class="hidden">
+          <div class="card" style="margin-bottom:16px">
+            <div style="display:flex;gap:12px;align-items:center">
+              <input type="text" class="form-input" id="doctorSearch" placeholder="🔍 Search doctors..." oninput="filterTable('doctorsTable', this.value)" style="max-width:280px" />
+              <button class="btn btn-primary btn-sm" onclick="openCreateUserModal('doctor')">+ Add Doctor</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th><th>Email</th><th>Specialization</th><th>Department</th>
+                    <th>Phone</th><th>Patients</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="doctorsTable"><tr><td colspan="7" style="text-align:center;padding:32px">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ASSIGN DOCTOR -->
+        <section id="section-assign" class="hidden">
+          <div class="card" style="max-width:520px;margin:0 auto">
+            <div class="card-title" style="margin-bottom:24px">🔗 Assign Doctor to Patient</div>
+            <form id="assignForm" onsubmit="assignDoctor(event)">
+              <div class="form-group">
+                <label class="form-label">Select Patient *</label>
+                <select id="assignPatient" class="form-select" required>
+                  <option value="">-- Select patient --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Select Doctor *</label>
+                <select id="assignDoctor" class="form-select" required>
+                  <option value="">-- Select doctor --</option>
+                </select>
+              </div>
+              <button type="submit" class="btn btn-primary w-full btn-lg" style="margin-top:8px">Assign Doctor</button>
+            </form>
+          </div>
+        </section>
+
+        <!-- REPORTS -->
+        <section id="section-reports" class="hidden">
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header">
+              <div class="card-title">📋 All Lab Reports</div>
+              <button class="btn btn-primary btn-sm" onclick="openAddReportModal()">+ Add Report</button>
+            </div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <select class="form-select" id="adminReportFilter" onchange="loadAdminReports()" style="width:auto">
+                <option value="">All Status</option>
+                <option value="Pending">Pending</option>
+                <option value="Reviewed">Reviewed</option>
+                <option value="Flagged">Flagged</option>
+              </select>
+            </div>
+          </div>
+          <div class="card">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>Patient</th><th>Type</th><th>Lab</th><th>Uploaded By</th><th>Date</th><th>Status</th><th>View</th></tr>
+                </thead>
+                <tbody id="adminReportsTable"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted)">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ALERTS -->
+        <section id="section-alerts" class="hidden">
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header">
+              <div class="card-title">🔔 All System Alerts</div>
+              <button class="btn btn-ghost btn-sm" onclick="loadAdminAlerts()">↻ Refresh</button>
+            </div>
+          </div>
+          <div id="adminAlertsList" style="display:flex;flex-direction:column;gap:12px">
+            <div class="loading-spinner"></div>
+          </div>
+        </section>
+
+        <!-- SETTINGS -->
+        <section id="section-settings" class="hidden">
+          <div class="grid-2" style="gap:20px">
+            <div class="card">
+              <div class="card-title" style="margin-bottom:24px">⚙️ AI Alert Thresholds</div>
+              <div class="form-group">
+                <label class="form-label">Heart Rate — Critical (>bpm)</label>
+                <input type="number" class="form-input" id="hrCritical" value="120" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Heart Rate — Risk (>bpm)</label>
+                <input type="number" class="form-input" id="hrRisk" value="100" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">SpO2 — Critical (<%) </label>
+                <input type="number" class="form-input" id="spo2Critical" value="90" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">SpO2 — Risk (<%) </label>
+                <input type="number" class="form-input" id="spo2Risk" value="95" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Temperature — Critical (>°F)</label>
+                <input type="number" class="form-input" id="tempCritical" value="103" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Temperature — Risk (>°F)</label>
+                <input type="number" class="form-input" id="tempRisk" value="100" />
+              </div>
+              <button class="btn btn-primary w-full" onclick="showToast('Threshold settings saved (UI demo)', 'success')">Save Thresholds</button>
+            </div>
+            <div class="card">
+              <div class="card-title" style="margin-bottom:24px">🏥 Hospital Settings</div>
+              <div class="form-group">
+                <label class="form-label">Hospital / Organisation Name</label>
+                <input type="text" class="form-input" value="City Medical Centre" id="hospitalName" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Admin Contact Email</label>
+                <input type="email" class="form-input" value="admin@carelink.health" id="adminEmail" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Support Phone</label>
+                <input type="text" class="form-input" value="+91 98765 43210" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">System Mode</label>
+                <select class="form-select">
+                  <option>Production</option>
+                  <option>Demo / Testing</option>
+                  <option>Maintenance</option>
+                </select>
+              </div>
+              <button class="btn btn-primary w-full" onclick="showToast('Hospital settings saved (UI demo)', 'success')">Save Settings</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- CREATE USER MODAL -->
+  <div id="createUserModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">➕ Add New User</div>
+        <button class="modal-close" onclick="closeCreateUserModal()">✕</button>
+      </div>
+      <form id="createUserForm" onsubmit="createUser(event)">
+        <div class="grid-2" style="gap:12px">
+          <div class="form-group">
+            <label class="form-label">Full Name *</label>
+            <input type="text" id="cuName" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email *</label>
+            <input type="email" id="cuEmail" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password *</label>
+            <input type="password" id="cuPassword" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Role *</label>
+            <select id="cuRole" class="form-select" required>
+              <option value="patient">Patient</option>
+              <option value="doctor">Doctor</option>
+              <option value="lab">Lab Staff</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input type="text" id="cuPhone" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Age</label>
+            <input type="number" id="cuAge" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Gender</label>
+            <select id="cuGender" class="form-select">
+              <option value="">--</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Blood Group</label>
+            <input type="text" id="cuBlood" class="form-input" placeholder="e.g. O+" />
+          </div>
+          <div class="form-group col-span-2" id="specField">
+            <label class="form-label">Specialization (for doctors)</label>
+            <input type="text" id="cuSpec" class="form-input" placeholder="e.g. Cardiologist" />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary w-full" style="margin-top:8px">Create User</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ADD REPORT MODAL -->
+  <div id="addReportModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">📋 Add Lab Report</div>
+        <button class="modal-close" onclick="closeAddReportModal()">✕</button>
+      </div>
+      <form id="addReportForm" onsubmit="adminAddReport(event)">
+        <div class="form-group">
+          <label class="form-label">Patient *</label>
+          <select id="arPatient" class="form-select" required></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Assign to Doctor</label>
+          <select id="arDoctor" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Report Type *</label>
+          <select id="arType" class="form-select" required>
+            <option value="blood_test">🩸 Blood Test</option>
+            <option value="ecg">💓 ECG</option>
+            <option value="xray">🦴 X-Ray</option>
+            <option value="mri">🧠 MRI</option>
+            <option value="urine">🧪 Urine Test</option>
+            <option value="ct_scan">🔬 CT Scan</option>
+            <option value="other">📄 Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lab Name</label>
+          <input type="text" id="arLab" class="form-input" placeholder="e.g. City Diagnostics" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Test Date</label>
+          <input type="date" id="arDate" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Upload File</label>
+          <input type="file" id="arFile" class="form-input" accept=".pdf,.jpg,.jpeg,.png" style="padding:10px" />
+        </div>
+        <button type="submit" class="btn btn-primary w-full">Add Report</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="js/auth.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

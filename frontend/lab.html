@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareLink — Lab Portal</title>
+  <meta name="description" content="CareLink Lab Portal: Upload and manage patient lab reports." />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">🔬</div>
+        <div>
+          <div class="logo-text">CareLink</div>
+          <div class="logo-subtitle">Lab Portal</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Main</div>
+        <a class="nav-item active" id="navUpload" href="#" onclick="showSection('upload', this)">
+          <span class="nav-icon">📤</span> Upload Report
+        </a>
+        <a class="nav-item" id="navArchive" href="#" onclick="showSection('archive', this)">
+          <span class="nav-icon">📁</span> Report Archive
+        </a>
+      </nav>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="sidebarAvatar">L</div>
+        <div class="user-info">
+          <div class="user-name" id="sidebarName">Lab Staff</div>
+          <div class="user-role" id="sidebarRole">lab</div>
+        </div>
+        <button class="logout-btn" onclick="logout()">⏻</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title" id="pageTitle">Upload Report</div>
+          <div class="topbar-subtitle" id="pageSubtitle">Upload lab reports and assign to patients and doctors</div>
+        </div>
+        <div class="topbar-right">
+          <div id="currentDateTime" style="font-size:13px;color:var(--text-muted)"></div>
+        </div>
+      </div>
+
+      <div class="page-content">
+
+        <!-- UPLOAD -->
+        <section id="section-upload" style="max-width:620px;margin:0 auto">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:8px">📤 Upload New Lab Report</div>
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">Upload and assign a lab report to a patient for doctor review.</div>
+
+            <form id="labUploadForm" onsubmit="uploadReport(event)">
+              <div class="form-group">
+                <label class="form-label">Patient *</label>
+                <select id="labPatient" class="form-select" required>
+                  <option value="">-- Select patient --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Assign to Doctor</label>
+                <select id="labDoctor" class="form-select">
+                  <option value="">-- Select doctor (optional) --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Report Type *</label>
+                <select id="labType" class="form-select" required>
+                  <option value="blood_test">🩸 Blood Test</option>
+                  <option value="ecg">💓 ECG</option>
+                  <option value="xray">🦴 X-Ray</option>
+                  <option value="mri">🧠 MRI</option>
+                  <option value="urine">🧪 Urine Test</option>
+                  <option value="ct_scan">🔬 CT Scan</option>
+                  <option value="other">📄 Other</option>
+                </select>
+              </div>
+              <div class="grid-2" style="gap:12px">
+                <div class="form-group">
+                  <label class="form-label">Lab Name</label>
+                  <input type="text" id="labName" class="form-input" placeholder="e.g. City Diagnostics" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Test Date</label>
+                  <input type="date" id="labDate" class="form-input" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea id="labNote" class="form-textarea" placeholder="Any additional notes..." rows="3"></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Upload File * (PDF / JPG / PNG, max 10MB)</label>
+                <input type="file" id="labFile" class="form-input" accept=".pdf,.jpg,.jpeg,.png" required style="padding:10px" />
+                <div id="filePreview" style="margin-top:10px;display:none">
+                  <div style="font-size:12px;color:var(--primary)" id="filePreviewText"></div>
+                </div>
+              </div>
+              
+              <!-- Upload Status -->
+              <div id="uploadProgress" style="display:none;margin-bottom:16px">
+                <div style="height:6px;background:var(--border);border-radius:99px;overflow:hidden">
+                  <div id="uploadBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--primary),var(--secondary));border-radius:99px;transition:width 0.4s"></div>
+                </div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:6px">Uploading...</div>
+              </div>
+
+              <button type="submit" id="uploadBtn" class="btn btn-primary w-full btn-lg">
+                📤 Upload Report
+              </button>
+            </form>
+          </div>
+
+          <!-- Recent Uploads Stats -->
+          <div class="stats-grid" style="margin-top:20px">
+            <div class="stat-card" style="--card-text:var(--primary)">
+              <div class="stat-icon">📋</div>
+              <div class="stat-value" id="statTotal">—</div>
+              <div class="stat-label">Total Uploaded</div>
+            </div>
+            <div class="stat-card" style="--card-text:var(--warning)">
+              <div class="stat-icon">⏳</div>
+              <div class="stat-value" id="statPending" style="color:var(--warning)">—</div>
+              <div class="stat-label">Pending Review</div>
+            </div>
+            <div class="stat-card" style="--card-text:var(--status-normal)">
+              <div class="stat-icon">✅</div>
+              <div class="stat-value" id="statReviewed">—</div>
+              <div class="stat-label">Reviewed</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ARCHIVE -->
+        <section id="section-archive" class="hidden">
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header">
+              <div class="card-title">📁 Upload Archive</div>
+              <div style="font-size:13px;color:var(--text-muted)">All reports uploaded by lab</div>
+            </div>
+            <input type="text" class="form-input" id="archiveSearch" placeholder="🔍 Search by patient name or type..." oninput="filterArchive()" style="max-width:320px" />
+          </div>
+          <div id="archiveList" style="display:flex;flex-direction:column;gap:12px">
+            <div class="loading-spinner"></div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="js/auth.js"></script>
+  <script src="js/lab.js"></script>
+</body>
+</html>
