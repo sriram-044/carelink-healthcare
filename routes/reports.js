@@ -49,7 +49,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
       testDate: testDate ? new Date(testDate) : null,
       patientNote,
       fileName: req.file?.originalname,
-      fileUrl: req.file ? `/uploads/${req.file.filename}` : null,
+      fileUrl: req.file ? `${process.env.BASE_URL || ''}/uploads/${req.file.filename}` : null,
       mimeType: req.file?.mimetype,
       status: 'Pending'
     });
@@ -74,7 +74,7 @@ router.post('/admin-add', auth, role('admin'), upload.single('file'), async (req
       labName,
       testDate: testDate ? new Date(testDate) : null,
       fileName: req.file?.originalname,
-      fileUrl: req.file ? `/uploads/${req.file.filename}` : null,
+      fileUrl: req.file ? `${process.env.BASE_URL || ''}/uploads/${req.file.filename}` : null,
       mimeType: req.file?.mimetype,
       status: 'Pending'
     });

@@ -1,5 +1,12 @@
 // lab.js — Lab Portal Logic
 
+// Resolve file URL — old records have relative paths, new ones have absolute URLs
+function getFileUrl(url) {
+  if (!url) return null;
+  if (url.startsWith('http')) return url; // already absolute
+  return `${BACKEND_URL}${url}`;          // prepend Render backend for relative paths
+}
+
 let archiveData = [];
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -149,7 +156,7 @@ function renderArchive(data) {
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
           <div style="font-size:11px;color:var(--text-muted)">${timeAgo(r.createdAt)}</div>
-          ${r.fileUrl ? `<a href="${r.fileUrl}" target="_blank" class="btn btn-ghost btn-sm">📥 View</a>` : ''}
+          ${r.fileUrl ? `<a href="${getFileUrl(r.fileUrl)}" target="_blank" class="btn btn-ghost btn-sm">📥 View</a>` : ''}
         </div>
       </div>
     </div>

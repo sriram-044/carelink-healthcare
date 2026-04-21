@@ -1,5 +1,12 @@
 // doctor.js — Doctor Portal Logic
 
+// Resolve file URL — handles both old relative and new absolute paths
+function getFileUrl(url) {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  return `${BACKEND_URL}${url}`;
+}
+
 let currentUser = null;
 let allPatients = [];
 let selectedPatientId = null;
@@ -467,7 +474,7 @@ async function loadDoctorReports() {
             <button class="btn btn-primary btn-sm" onclick="openReviewModal('${r._id}','${r.patientId?.name || 'Patient'}','${r.reportType}','${(r.patientNote || '').replace(/'/g, "\\'")}')">
               Review
             </button>` : `<button class="btn btn-ghost btn-sm" onclick="openReviewModal('${r._id}','${r.patientId?.name || 'Patient'}','${r.reportType}','${(r.patientNote || '').replace(/'/g, "\\'")}')">Update</button>`}
-          ${r.fileUrl ? `<a href="${r.fileUrl}" target="_blank" class="btn btn-ghost btn-sm">📥 View File</a>` : ''}
+          ${r.fileUrl ? `<a href="${getFileUrl(r.fileUrl)}" target="_blank" class="btn btn-ghost btn-sm">📥 View File</a>` : ''}
         </div>
       </div>
     </div>
