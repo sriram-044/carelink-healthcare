@@ -2,7 +2,7 @@
 
 // Auto-detect production vs development
 const IS_PROD = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const BACKEND_URL = IS_PROD ? 'https://carelink-api.onrender.com' : '';
+const BACKEND_URL = IS_PROD ? 'https://carelink-api-3vzd.onrender.com' : '';
 const API_BASE = `${BACKEND_URL}/api`;
 
 function getToken() {
