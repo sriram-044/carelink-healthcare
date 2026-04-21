@@ -174,25 +174,140 @@
           </div>
         </section>
 
-        <!-- ASSIGN DOCTOR -->
+        <!-- ASSIGN DOCTOR — AI-ASSISTED -->
         <section id="section-assign" class="hidden">
-          <div class="card" style="max-width:520px;margin:0 auto">
-            <div class="card-title" style="margin-bottom:24px">🔗 Assign Doctor to Patient</div>
-            <form id="assignForm" onsubmit="assignDoctor(event)">
-              <div class="form-group">
-                <label class="form-label">Select Patient *</label>
-                <select id="assignPatient" class="form-select" required>
+          <style>
+            .assign-layout { display:grid; grid-template-columns:360px 1fr; gap:20px; align-items:start; }
+            .assign-step { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
+            .assign-step-num { width:28px; height:28px; border-radius:50%; background:var(--primary); color:#000; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+            .assign-step-num.done { background:var(--secondary); }
+            .assign-step-num.inactive { background:var(--border); color:var(--text-muted); }
+            .patient-info-card { background:rgba(0,212,170,0.06); border:1px solid rgba(0,212,170,0.2); border-radius:12px; padding:16px; margin-top:16px; display:none; }
+            .patient-info-card.visible { display:block; }
+            .pi-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
+            .pi-row:last-child { border:none; }
+            .pi-label { color:var(--text-muted); }
+            .pi-val { font-weight:600; color:var(--text-primary); }
+            .ai-btn { width:100%; margin-top:16px; position:relative; overflow:hidden; }
+            .ai-btn::before { content:''; position:absolute; inset:0; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); transform:translateX(-100%); transition:0.6s; }
+            .ai-btn:hover::before { transform:translateX(100%); }
+            .doctor-cards { display:flex; flex-direction:column; gap:14px; }
+            .doctor-card { background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:16px; cursor:pointer; transition:all 0.2s; position:relative; }
+            .doctor-card:hover { border-color:var(--primary); transform:translateY(-1px); box-shadow:0 4px 20px rgba(0,212,170,0.12); }
+            .doctor-card.selected { border-color:var(--primary); background:rgba(0,212,170,0.07); box-shadow:0 0 0 2px rgba(0,212,170,0.25); }
+            .doctor-card.rank-1 { border-color:rgba(0,212,170,0.4); }
+            .doctor-avatar-lg { width:50px; height:50px; border-radius:14px; background:linear-gradient(135deg,var(--secondary),#a29bfe); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px; flex-shrink:0; }
+            .doctor-card-info { flex:1; min-width:0; }
+            .doctor-card-name { font-size:15px; font-weight:700; color:var(--text-primary); }
+            .doctor-card-spec { font-size:12px; color:var(--text-muted); margin-top:2px; }
+            .doctor-card-badges { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+            .badge-load { font-size:11px; padding:3px 8px; border-radius:20px; background:rgba(108,99,255,0.15); color:#a29bfe; font-weight:600; }
+            .badge-dept { font-size:11px; padding:3px 8px; border-radius:20px; background:rgba(0,212,170,0.12); color:var(--primary); font-weight:600; }
+            .match-score { display:flex; flex-direction:column; align-items:center; flex-shrink:0; }
+            .match-pct { font-size:22px; font-weight:800; line-height:1; }
+            .match-label { font-size:10px; color:var(--text-muted); margin-top:2px; text-transform:uppercase; letter-spacing:0.5px; }
+            .match-bar-wrap { width:100%; background:var(--border); border-radius:4px; height:4px; margin-top:6px; overflow:hidden; }
+            .match-bar-fill { height:4px; border-radius:4px; background:var(--primary); transition:width 0.8s ease; }
+            .rank-crown { position:absolute; top:-8px; left:16px; background:linear-gradient(135deg,#fdcb6e,#e17055); color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; letter-spacing:0.5px; }
+            .ai-analysis-panel { background:rgba(108,99,255,0.08); border:1px solid rgba(108,99,255,0.2); border-radius:12px; padding:16px; margin-bottom:18px; }
+            .ai-factors { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+            .ai-factor { display:flex; align-items:center; gap:8px; font-size:12px; }
+            .ai-factor-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+            .confirm-bar { background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:20px; margin-top:16px; }
+            .confirm-summary { display:flex; gap:16px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+            .confirm-tag { background:var(--bg-base); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:13px; }
+            .confirm-tag strong { display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px; font-weight:500; }
+            .assign-empty { text-align:center; padding:60px 20px; color:var(--text-muted); }
+            .assign-empty-icon { font-size:48px; margin-bottom:16px; }
+            @media(max-width:900px){ .assign-layout{grid-template-columns:1fr;} }
+          </style>
+
+          <!-- Top stats strip -->
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px">
+            <div class="card" style="flex:1;min-width:130px;padding:14px 18px;">
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted)">Unassigned Patients</div>
+              <div style="font-size:28px;font-weight:800;color:var(--danger)" id="statUnassigned">—</div>
+            </div>
+            <div class="card" style="flex:1;min-width:130px;padding:14px 18px;">
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted)">Total Patients</div>
+              <div style="font-size:28px;font-weight:800;color:var(--primary)" id="aiStatPatients">—</div>
+            </div>
+            <div class="card" style="flex:1;min-width:130px;padding:14px 18px;">
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted)">Doctors Available</div>
+              <div style="font-size:28px;font-weight:800;color:var(--secondary)" id="aiStatDoctors">—</div>
+            </div>
+            <div class="card" style="flex:1;min-width:130px;padding:14px 18px;">
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted)">Avg Patients/Doctor</div>
+              <div style="font-size:28px;font-weight:800;color:#fdcb6e" id="aiStatAvg">—</div>
+            </div>
+          </div>
+
+          <div class="assign-layout">
+            <!-- LEFT — Patient selector & info -->
+            <div>
+              <div class="card">
+                <!-- Step 1 -->
+                <div class="assign-step">
+                  <div class="assign-step-num" id="step1Num">1</div>
+                  <div>
+                    <div style="font-size:13px;font-weight:700">Select Patient</div>
+                    <div style="font-size:11px;color:var(--text-muted)">Choose who needs a doctor</div>
+                  </div>
+                </div>
+                <select id="assignPatient" class="form-select" onchange="onPatientSelect(this.value)">
                   <option value="">-- Select patient --</option>
                 </select>
+
+                <!-- Patient info card -->
+                <div class="patient-info-card" id="patientInfoCard">
+                  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                    <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px" id="piAvatar">?</div>
+                    <div>
+                      <div style="font-weight:700;font-size:15px" id="piName">—</div>
+                      <div style="font-size:11px;color:var(--text-muted)" id="piEmail">—</div>
+                    </div>
+                  </div>
+                  <div class="pi-row"><span class="pi-label">Age / Gender</span><span class="pi-val" id="piAge">—</span></div>
+                  <div class="pi-row"><span class="pi-label">Blood Group</span><span class="pi-val" id="piBlood">—</span></div>
+                  <div class="pi-row"><span class="pi-label">Phone</span><span class="pi-val" id="piPhone">—</span></div>
+                  <div class="pi-row"><span class="pi-label">Current Doctor</span><span class="pi-val" id="piDoctor">—</span></div>
+                  <div class="pi-row"><span class="pi-label">AI Risk Status</span><span class="pi-val" id="piRisk">—</span></div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="assign-step" style="margin-top:24px">
+                  <div class="assign-step-num inactive" id="step2Num">2</div>
+                  <div>
+                    <div style="font-size:13px;font-weight:700">AI Analysis</div>
+                    <div style="font-size:11px;color:var(--text-muted)">Scores doctors by fit</div>
+                  </div>
+                </div>
+                <button class="btn btn-primary ai-btn" id="analyzeBtn" onclick="runAiAnalysis()" disabled>
+                  🤖 Analyse & Recommend Doctors
+                </button>
+
+                <!-- Step 3 -->
+                <div class="assign-step" style="margin-top:24px">
+                  <div class="assign-step-num inactive" id="step3Num">3</div>
+                  <div>
+                    <div style="font-size:13px;font-weight:700">Review & Confirm</div>
+                    <div style="font-size:11px;color:var(--text-muted)">Human approval required</div>
+                  </div>
+                </div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;padding:10px;background:rgba(108,99,255,0.06);border-radius:8px">
+                  🛡️ AI recommends · You approve · Assignment logged
+                </div>
               </div>
-              <div class="form-group">
-                <label class="form-label">Select Doctor *</label>
-                <select id="assignDoctor" class="form-select" required>
-                  <option value="">-- Select doctor --</option>
-                </select>
+            </div>
+
+            <!-- RIGHT — AI results -->
+            <div id="aiResultsPanel">
+              <div class="assign-empty">
+                <div class="assign-empty-icon">🤖</div>
+                <div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:8px">AI Analysis Ready</div>
+                <div>Select a patient on the left, then click<br/><strong>Analyse & Recommend Doctors</strong></div>
               </div>
-              <button type="submit" class="btn btn-primary w-full btn-lg" style="margin-top:8px">Assign Doctor</button>
-            </form>
+            </div>
           </div>
         </section>
 
