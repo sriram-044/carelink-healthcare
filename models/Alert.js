@@ -9,8 +9,14 @@ const AlertSchema = new mongoose.Schema({
   vitals: {
     heartRate: Number,
     spo2: Number,
-    temperature: Number
+    temperature: Number,
+    systolicBP: Number,
+    diastolicBP: Number
   },
+  fallDetected: { type: Boolean, default: false },
+  location: { type: String, default: 'Home' },
+  notifiedEntities: [{ type: String }], // e.g. ['Caregiver', 'Family', 'Doctor', 'Hospital']
+  emergencyStatus: { type: String, enum: ['Pending', 'Acknowledged', 'Dispatched', 'Resolved'], default: 'Pending' },
   reasons: [{ type: String }],
   resolved: { type: Boolean, default: false },
   resolvedAt: { type: Date },

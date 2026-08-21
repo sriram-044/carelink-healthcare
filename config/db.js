@@ -17,8 +17,26 @@ const connectDB = async () => {
       process.env._MONGO_IN_MEMORY_URI = uri;
     }
 
-    const conn = await mongoose.connect(uri);
-    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    try {
+      const conn = await mongoose.connect(uri);
+      console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    } catch (atlasErr) {
+      if (!useInMemory) {
+        console.warn(`⚠️ Could not connect to remote MongoDB Atlas (${atlasErr.message}).`);
+        console.log('⚡ Falling back to MongoDB in-memory server...');
+        const { MongoMemoryServer } = require('mongodb-memory-server');
+        const mongod = await MongoMemoryServer.create();
+        uri = mongod.getUri();
+        process.env._MONGO_IN_MEMORY_URI = uri;
+        const conn = await mongoose.connect(uri);
+        console.log(`✅ In-Memory MongoDB Connected: ${conn.connection.host}`);
+        setTimeout(() => {
+          require('../utils/autoSeed').seed().catch(() => {});
+        }, 500);
+      } else {
+        throw atlasErr;
+      }
+    }
 
     if (useInMemory) {
       // Auto-seed after connection

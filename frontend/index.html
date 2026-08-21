@@ -288,19 +288,31 @@
         <div class="login-form-subtitle">Sign in to your CareLink portal</div>
       </div>
 
-      <!-- Role Selector -->
-      <div class="role-selector">
+      <!-- Role Selector (8 Portals Ecosystem) -->
+      <div class="role-selector" style="grid-template-columns: repeat(4, 1fr); gap: 8px;">
         <button class="role-btn selected" data-role="patient" onclick="selectRole('patient', this)">
-          <span class="role-emoji">🧑‍🦽</span> Patient
+          <span class="role-emoji">👤</span> Patient
         </button>
         <button class="role-btn" data-role="doctor" onclick="selectRole('doctor', this)">
-          <span class="role-emoji">🩺</span> Doctor
+          <span class="role-emoji">👨‍⚕️</span> Doctor
         </button>
-        <button class="role-btn" data-role="admin" onclick="selectRole('admin', this)">
-          <span class="role-emoji">🛡️</span> Admin
+        <button class="role-btn" data-role="hospital" onclick="selectRole('hospital', this)">
+          <span class="role-emoji">🏥</span> Hospital
         </button>
         <button class="role-btn" data-role="lab" onclick="selectRole('lab', this)">
-          <span class="role-emoji">🔬</span> Lab Staff
+          <span class="role-emoji">🧪</span> Lab
+        </button>
+        <button class="role-btn" data-role="pharmacy" onclick="selectRole('pharmacy', this)">
+          <span class="role-emoji">💊</span> Pharmacy
+        </button>
+        <button class="role-btn" data-role="insurance" onclick="selectRole('insurance', this)">
+          <span class="role-emoji">🛡️</span> Insurance
+        </button>
+        <button class="role-btn" data-role="emergency" onclick="selectRole('emergency', this)">
+          <span class="role-emoji">🚑</span> Emergency
+        </button>
+        <button class="role-btn" data-role="admin" onclick="selectRole('admin', this)">
+          <span class="role-emoji">⚙️</span> Admin
         </button>
       </div>
 
@@ -315,7 +327,7 @@
           <input type="password" id="loginPassword" class="form-input" placeholder="Enter your password" required autocomplete="current-password" />
         </div>
         <button type="submit" class="btn btn-primary w-full btn-lg" id="loginBtn">
-          <span id="loginBtnText">Sign In</span>
+          <span id="loginBtnText">Sign In to Portal</span>
         </button>
       </form>
 
@@ -331,12 +343,12 @@
         Continue with Google
       </a>
 
-      <div class="demo-creds">
-        <div style="font-weight:600;margin-bottom:6px;color:var(--text-primary);">🎯 Demo Credentials</div>
-        <div><strong>Patient:</strong> patient@demo.com / demo123</div>
-        <div><strong>Doctor:</strong> doctor@demo.com / demo123</div>
-        <div><strong>Admin:</strong> admin@demo.com / demo123</div>
-        <div><strong>Lab:</strong> lab@demo.com / demo123</div>
+      <div class="demo-creds" style="font-size: 11px; line-height: 1.6;">
+        <div style="font-weight:700;margin-bottom:4px;color:var(--text-primary);">🎯 8-Portal Ecosystem Credentials (Password: demo123)</div>
+        <div>👤 <strong>Patient:</strong> ravi@demo.com | 👨‍⚕️ <strong>Doctor:</strong> doctor@demo.com</div>
+        <div>🏥 <strong>Hospital / Admin:</strong> admin@demo.com | 🧪 <strong>Lab:</strong> lab@demo.com</div>
+        <div>💊 <strong>Pharmacy:</strong> pharmacy@demo.com | 🛡️ <strong>Insurance:</strong> insurance@demo.com</div>
+        <div>🚑 <strong>Emergency:</strong> emergency@demo.com</div>
       </div>
     </div>
   </div>
@@ -356,6 +368,16 @@
       selectedRole = role;
       document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
+    }
+
+    function redirectRolePortal(role) {
+      if (role === 'patient') window.location.href = 'patient.html';
+      else if (role === 'doctor') window.location.href = 'doctor.html';
+      else if (role === 'lab') window.location.href = 'lab.html';
+      else if (role === 'pharmacy') window.location.href = 'pharmacy.html';
+      else if (role === 'insurance') window.location.href = 'insurance.html';
+      else if (role === 'emergency') window.location.href = 'emergency.html';
+      else window.location.href = 'admin.html';
     }
 
     async function handleLogin(e) {
@@ -394,10 +416,7 @@
         }
 
         setTimeout(() => {
-          if (actualRole === 'patient') window.location.href = 'patient.html';
-          else if (actualRole === 'doctor') window.location.href = 'doctor.html';
-          else if (actualRole === 'admin') window.location.href = 'admin.html';
-          else if (actualRole === 'lab') window.location.href = 'lab.html';
+          redirectRolePortal(actualRole);
         }, 1200);
       } catch (err) {
         showToast('Connection error. Is the server running?', 'error');

@@ -32,7 +32,8 @@ function showSection(section, navEl) {
     medication: ['Medication', 'Track your daily medications'],
     appointments: ['Appointments', 'Your upcoming doctor visits'],
     reports: ['Lab Reports', 'Upload and view your medical reports'],
-    diet: ['Diet Plan', 'Your personalised nutrition plan']
+    diet: ['Diet Plan', 'Your personalised nutrition plan'],
+    history: ['Medical History & Profile', 'Complete record of hospital visits, allergies, and pre-existing conditions']
   };
   document.getElementById('pageTitle').textContent = titles[section][0];
   document.getElementById('pageSubtitle').textContent = titles[section][1];
@@ -41,6 +42,7 @@ function showSection(section, navEl) {
   if (section === 'medication') loadMedications();
   if (section === 'reports') loadReports();
   if (section === 'diet') loadDietPlan();
+  if (section === 'history') loadLifetimeMedicalHistory();
 }
 
 // ═══════════════════════
@@ -106,6 +108,78 @@ function updateAIRing(score, status, reasons, recommendation, time) {
 
   // Sync to overview
   document.getElementById('overviewScore').textContent = score ?? '—';
+}
+
+// ═══════════════════════
+// SMARTWATCH WEARABLE TELEMETRY SIMULATION
+// ═══════════════════════
+async function simulateWearable(mode) {
+  const badge = document.getElementById('wearableStatusBadge');
+  if (badge) badge.textContent = '⏳ Streaming...';
+
+  let payload = {};
+  if (mode === 'critical') {
+    payload = {
+      heartRate: 145,
+      spo2: 88,
+      temperature: 101.2,
+      stepCount: 120,
+      fallDetected: true,
+      roomLocation: currentUser.roomLocation || 'Room 104, Sunrise Senior Home'
+    };
+  } else {
+    payload = {
+      heartRate: 72,
+      spo2: 98,
+      temperature: 98.6,
+      stepCount: 4500,
+      fallDetected: false,
+      roomLocation: currentUser.roomLocation || 'Home / Apartment'
+    };
+  }
+
+  const res = await apiRequest('/vitals/wearable-sync', { method: 'POST', body: payload });
+  if (badge) badge.textContent = '📡 Device Synced';
+
+  if (!res || !res.ok) {
+    showToast('Failed to sync smartwatch telemetry', 'error');
+    return;
+  }
+
+  const { vitals, ai, emergencyAlert } = res.data;
+  showToast(`Wearable Synced! AI Score: ${ai.score}/100 — ${ai.status}`,
+    ai.status === 'Critical' ? 'error' : 'success');
+
+  // Update Overview & Live Displays
+  document.getElementById('overviewHR').textContent = vitals.heartRate;
+  document.getElementById('overviewSpO2').textContent = `${vitals.spo2}%`;
+  document.getElementById('overviewTemp').textContent = `${vitals.temperature}°`;
+  document.getElementById('overviewScore').textContent = vitals.aiScore;
+
+  document.getElementById('liveHR').textContent = vitals.heartRate;
+  document.getElementById('liveSpO2').textContent = vitals.spo2;
+  document.getElementById('liveTemp').textContent = vitals.temperature;
+
+  updateAIRing(ai.score, ai.status, ai.reasons, ai.recommendation, new Date());
+
+  // Render Emergency Banner if escalation triggered
+  const banner = document.getElementById('emergencyStatusBanner');
+  if (banner) {
+    if (ai.status === 'Critical' || vitals.fallDetected) {
+      banner.style.display = 'block';
+      document.getElementById('emergencyBannerDetails').innerHTML = `
+        Location: <strong>${vitals.location}</strong> | Event: <strong>${vitals.fallDetected ? 'Hard Fall Impact Detected' : 'Abnormal Telemetry'}</strong><br/>
+        AI Score: <strong style="color:#ff4d4d">${ai.score}/100</strong> — ${ai.reasons.join(' • ')}
+      `;
+      document.getElementById('caregiverPhoneDisp').textContent = currentUser.caregiverPhone || '+91 98765 88888 (Caregiver)';
+      document.getElementById('familyPhoneDisp').textContent = currentUser.emergencyContact || '+91 98765 99999 (Family)';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  loadAlerts();
+  loadTrendChart();
 }
 
 // ═══════════════════════
@@ -463,4 +537,148 @@ async function triggerSOS() {
 function getReportEmoji(type) {
   const map = { blood_test: '🩸', ecg: '💓', xray: '🦴', mri: '🧠', urine: '🧪', ct_scan: '🔬', other: '📄' };
   return map[type] || '📄';
+}
+
+// ═══════════════════════
+// LIFETIME MEDICAL HISTORY & PROFILE
+// ═══════════════════════
+function toggleAddForm(cardId) {
+  const card = document.getElementById(cardId);
+  if (card) card.classList.toggle('hidden');
+}
+
+async function loadLifetimeMedicalHistory() {
+  const res = await apiRequest(`/patients/${currentUser.id}/lifetime-history`);
+  if (!res || !res.ok) {
+    showToast('Failed to load medical history', 'error');
+    return;
+  }
+
+  const { hospitalVisits, allergiesDetail, medicalConditionsDetail, patient } = res.data;
+
+  // 1. Render Hospital Visits Timeline
+  const visitsContainer = document.getElementById('hospitalVisitsTimeline');
+  if (!hospitalVisits || !hospitalVisits.length) {
+    visitsContainer.innerHTML = '<div class="empty-state"><div class="empty-icon">🏥</div><div class="empty-text">No hospital admissions or visits recorded yet</div></div>';
+  } else {
+    visitsContainer.innerHTML = hospitalVisits.map(v => `
+      <div class="card" style="border-left: 4px solid var(--primary); background: rgba(17,28,45,0.6);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+          <div>
+            <div style="font-size:16px; font-weight:700; color:var(--text-primary);">${v.hospitalName}</div>
+            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+              ${v.visitType} • ${formatDate(v.visitDate)} ${v.doctorName ? `• Attending: ${v.doctorName}` : ''}
+            </div>
+          </div>
+          <span class="badge ${v.status === 'Discharged' ? 'badge-normal' : v.status === 'Admitted' ? 'badge-critical' : 'badge-reviewed'}">${v.status}</span>
+        </div>
+        <div style="font-size:13px; color:var(--text-secondary); margin-top:10px;">
+          <strong>Reason for Visit:</strong> ${v.reason}
+        </div>
+        ${v.diagnosis ? `<div style="font-size:13px; color:var(--primary); margin-top:4px;"><strong>Diagnosis:</strong> ${v.diagnosis}</div>` : ''}
+        ${v.dischargeSummary ? `
+          <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius-sm); padding:10px; margin-top:8px; font-size:12px; color:var(--text-secondary);">
+            <strong>Discharge Summary:</strong> ${v.dischargeSummary}
+          </div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  // 2. Render Allergies List
+  const allergiesContainer = document.getElementById('allergiesListContainer');
+  const allergies = allergiesDetail && allergiesDetail.length ? allergiesDetail : (patient?.allergies || []).map(a => ({ name: a, severity: 'Moderate', reaction: 'Reported allergy' }));
+
+  if (!allergies.length) {
+    allergiesContainer.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">No known drug/food allergies reported</div></div>';
+  } else {
+    const sevColors = { Mild: 'var(--status-normal)', Moderate: 'var(--status-risk)', Severe: '#ff4d4d', Critical: '#ff0055' };
+    allergiesContainer.innerHTML = allergies.map(a => `
+      <div style="background:rgba(255,77,77,0.08); border:1px solid rgba(255,77,77,0.2); border-radius:var(--radius-md); padding:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:14px; font-weight:700; color:#ff6b6b">⚠️ ${a.name}</div>
+          <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Reaction: ${a.reaction || 'Hypersensitivity reaction'}</div>
+        </div>
+        <span class="badge" style="background:${sevColors[a.severity] || '#ff4d4d'}; color:#fff; font-weight:700;">${a.severity}</span>
+      </div>
+    `).join('');
+  }
+
+  // 3. Render Medical Conditions
+  const conditionsContainer = document.getElementById('conditionsListContainer');
+  const conditions = medicalConditionsDetail && medicalConditionsDetail.length ? medicalConditionsDetail : (patient?.medicalHistory || []).map(c => ({ condition: c, status: 'Active', diagnosedYear: '—' }));
+
+  if (!conditions.length) {
+    conditionsContainer.innerHTML = '<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-text">No pre-existing conditions recorded</div></div>';
+  } else {
+    conditionsContainer.innerHTML = conditions.map(c => `
+      <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:14px; font-weight:700; color:var(--text-primary);">🩺 ${c.condition}</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Diagnosed Year: ${c.diagnosedYear || '—'}</div>
+        </div>
+        <span class="badge ${c.status === 'Active' ? 'badge-critical' : c.status === 'Managed' ? 'badge-normal' : 'badge-risk'}">${c.status}</span>
+      </div>
+    `).join('');
+  }
+}
+
+async function submitHospitalVisit(e) {
+  e.preventDefault();
+  const payload = {
+    hospitalName: document.getElementById('hvHospital').value,
+    visitType: document.getElementById('hvType').value,
+    visitDate: document.getElementById('hvDate').value,
+    doctorName: document.getElementById('hvDoctor').value,
+    reason: document.getElementById('hvReason').value,
+    diagnosis: document.getElementById('hvDiagnosis').value,
+    dischargeSummary: document.getElementById('hvSummary').value
+  };
+
+  const res = await apiRequest(`/patients/${currentUser.id}/hospital-visit`, { method: 'POST', body: payload });
+  if (res?.ok) {
+    showToast('Hospital visit saved to lifetime record! 🏥', 'success');
+    e.target.reset();
+    toggleAddForm('visitFormCard');
+    loadLifetimeMedicalHistory();
+  } else {
+    showToast('Failed to save hospital visit', 'error');
+  }
+}
+
+async function submitAllergy(e) {
+  e.preventDefault();
+  const payload = {
+    name: document.getElementById('algName').value,
+    severity: document.getElementById('algSeverity').value,
+    reaction: document.getElementById('algReaction').value
+  };
+
+  const res = await apiRequest(`/patients/${currentUser.id}/allergies`, { method: 'POST', body: payload });
+  if (res?.ok) {
+    showToast('Allergy added to medical record! ⚠️', 'warning');
+    e.target.reset();
+    toggleAddForm('allergyFormCard');
+    loadLifetimeMedicalHistory();
+  } else {
+    showToast('Failed to save allergy', 'error');
+  }
+}
+
+async function submitCondition(e) {
+  e.preventDefault();
+  const payload = {
+    condition: document.getElementById('condName').value,
+    diagnosedYear: document.getElementById('condYear').value,
+    status: document.getElementById('condStatus').value
+  };
+
+  const res = await apiRequest(`/patients/${currentUser.id}/medical-conditions`, { method: 'POST', body: payload });
+  if (res?.ok) {
+    showToast('Medical condition added to profile! 🩺', 'success');
+    e.target.reset();
+    toggleAddForm('conditionFormCard');
+    loadLifetimeMedicalHistory();
+  } else {
+    showToast('Failed to save condition', 'error');
+  }
 }

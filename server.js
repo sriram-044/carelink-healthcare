@@ -99,6 +99,9 @@ app.use('/api/ai', require('./routes/ai'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/medication', require('./routes/medication'));
+app.use('/api/pharmacy', require('./routes/pharmacy'));
+app.use('/api/insurance', require('./routes/insurance'));
+app.use('/api/emergency', require('./routes/emergency'));
 app.use('/api/admin', require('./routes/admin'));
 
 // ─── Health Check ─────────────────────────────────────────────────────────

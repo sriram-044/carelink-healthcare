@@ -591,12 +591,24 @@ async function openPatientModal(pid) {
         <div style="font-size:15px;font-weight:600">${patient.bloodGroup || '—'}</div>
       </div>
       <div>
-        <div style="font-size:12px;color:var(--text-muted)">Email</div>
-        <div style="font-size:14px">${patient.email}</div>
+        <div style="font-size:12px;color:var(--text-muted)">Location / Room</div>
+        <div style="font-size:14px;color:var(--primary);font-weight:600">📍 ${patient.roomLocation || 'Home'}</div>
       </div>
       <div>
-        <div style="font-size:12px;color:var(--text-muted)">Phone</div>
-        <div style="font-size:14px">${patient.phone || '—'}</div>
+        <div style="font-size:12px;color:var(--text-muted)">Caregiver Contact</div>
+        <div style="font-size:14px">👩‍⚕️ ${patient.caregiverPhone || '—'}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-muted)">Emergency Family Contact</div>
+        <div style="font-size:14px">👨‍👩‍👧 ${patient.emergencyContact || '—'}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-muted)">Medical History</div>
+        <div style="font-size:13px;color:var(--text-secondary)">${patient.medicalHistory?.length ? patient.medicalHistory.join(', ') : 'None listed'}</div>
+      </div>
+      <div style="grid-column: 1 / -1;">
+        <div style="font-size:12px;color:var(--text-muted)">Known Allergies</div>
+        <div style="font-size:13px;color:#ff6b6b">${patient.allergies?.length ? patient.allergies.join(', ') : 'None reported'}</div>
       </div>
     </div>
     ${patient.latestVitals ? `

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareLink — Emergency Response Portal</title>
+  <meta name="description" content="CareLink Emergency Portal: Critical alerts, hard fall event telemetry, and live ambulance dispatch." />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">🚑</div>
+        <div>
+          <div class="logo-text">MediLink AI</div>
+          <div class="logo-subtitle">Emergency Response</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Main</div>
+        <a class="nav-item active" href="#">
+          <span class="nav-icon">🚨</span> Critical Incident Stream
+        </a>
+      </nav>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="sidebarAvatar">E</div>
+        <div class="user-info">
+          <div class="user-name" id="sidebarName">ER Officer</div>
+          <div class="user-role">emergency</div>
+        </div>
+        <button class="logout-btn" onclick="logout()" title="Logout">⏻</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title">🚑 Emergency & Ambulance Dispatch Control</div>
+          <div class="topbar-subtitle">Real-time wearable fall alerts & AI critical risk incident feed</div>
+        </div>
+      </div>
+
+      <div class="page-content">
+        <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
+          <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--danger),#c0392b);">
+            <div class="stat-icon">🚨</div>
+            <div class="stat-value" id="statActiveIncidents" style="color:var(--danger)">0</div>
+            <div class="stat-label">Active Emergencies</div>
+          </div>
+          <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--warning),#e17055);">
+            <div class="stat-icon">🚑</div>
+            <div class="stat-value" id="statAmbulanceDispatched" style="color:var(--warning)">0</div>
+            <div class="stat-label">Ambulances On Route</div>
+          </div>
+          <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--status-normal),#00b894);">
+            <div class="stat-icon">🏥</div>
+            <div class="stat-value" id="statArrivedER" style="color:var(--status-normal)">0</div>
+            <div class="stat-label">Arrived at Trauma ER</div>
+          </div>
+          <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--primary),var(--secondary));">
+            <div class="stat-icon">📍</div>
+            <div class="stat-value" style="color:var(--primary)">GPS Live</div>
+            <div class="stat-label">Location Tracking</div>
+          </div>
+        </div>
+
+        <div class="card mb-20">
+          <div class="card-header">
+            <div class="card-title">🚨 Real-time Emergency Incident Stream</div>
+            <button class="btn btn-ghost btn-sm" onclick="loadEmergencyAlerts()">↻ Refresh Incident Feed</button>
+          </div>
+          <div id="emergencyIncidentsList" style="display:flex; flex-direction:column; gap:14px;">
+            <div class="loading-spinner"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="js/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!requireAuth('emergency')) return;
+      initSidebar();
+      loadEmergencyAlerts();
+    });
+
+    async function loadEmergencyAlerts() {
+      const res = await apiRequest('/emergency/alerts');
+      const container = document.getElementById('emergencyIncidentsList');
+      if (!res || !res.ok || !res.data.length) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">No active emergency incidents detected</div></div>';
+        return;
+      }
+
+      const alerts = res.data;
+      const active = alerts.filter(a => !a.resolved).length;
+      const dispatched = alerts.filter(a => a.emergencyStatus === 'Dispatched' || a.emergencyStatus === 'On Route').length;
+      const arrived = alerts.filter(a => a.emergencyStatus === 'Arrived' || a.resolved).length;
+
+      document.getElementById('statActiveIncidents').textContent = active;
+      document.getElementById('statAmbulanceDispatched').textContent = dispatched;
+      document.getElementById('statArrivedER').textContent = arrived;
+
+      container.innerHTML = alerts.map(a => `
+        <div class="card" style="background:rgba(255,77,77,0.08); border:1.5px solid rgba(255,77,77,0.4);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+                <span style="font-size:20px;">🚨</span>
+                <span style="font-size:16px; font-weight:800; color:#ff4d4d">${a.patientId?.name || 'Patient'}</span>
+                <span class="badge badge-critical">${a.type} ${a.fallDetected ? '(HARD FALL DETECTED)' : ''}</span>
+              </div>
+              <div style="font-size:13px; color:var(--text-primary); font-weight:600; margin-bottom:6px;">
+                📍 Location: <span style="color:var(--primary)">${a.location || a.patientId?.roomLocation || 'Room 104, Sunrise Senior Home'}</span>
+              </div>
+              <div style="font-size:13px; color:var(--text-secondary); margin-bottom:6px;">
+                ${a.message}
+              </div>
+              <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--text-muted);">
+                <div>👩‍⚕️ Caregiver: <strong>${a.patientId?.caregiverPhone || '+91 98765 88888'}</strong></div>
+                <div>👨‍👩‍👧 Family: <strong>${a.patientId?.emergencyContact || '+91 98765 99999'}</strong></div>
+                <div>🩸 Blood Group: <strong>${a.patientId?.bloodGroup || 'O+'}</strong></div>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+              <span class="badge" style="background:linear-gradient(90deg,var(--danger),#c0392b); color:#fff; font-weight:700;">Status: ${a.emergencyStatus || 'Dispatched'}</span>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-warning btn-sm" onclick="updateDispatchStatus('${a._id}','On Route')">🚑 Ambulance On Route</button>
+                <button class="btn btn-primary btn-sm" onclick="updateDispatchStatus('${a._id}','Arrived')">🏥 Arrived at ER</button>
+                <button class="btn btn-ghost btn-sm" onclick="updateDispatchStatus('${a._id}','Resolved')">✅ Clear Ticket</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function updateDispatchStatus(id, status) {
+      const res = await apiRequest(`/emergency/dispatch/${id}`, {
+        method: 'PUT',
+        body: { status }
+      });
+      if (res?.ok) {
+        showToast(`Ambulance dispatch status updated to "${status}" 🚑`, 'success');
+        loadEmergencyAlerts();
+      } else {
+        showToast('Failed to update dispatch status', 'error');
+      }
+    }
+  </script>
+</body>
+</html>
