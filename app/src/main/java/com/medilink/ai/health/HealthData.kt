@@ -2,13 +2,15 @@ package com.medilink.ai.health
 
 /**
  * Data model representing patient health metrics read from Health Connect.
- * Uses nullable fields because health data may or may not exist in Health Connect.
+ * Includes origin metadata (smartwatch/app provider name) for live connection demonstration.
  */
 data class HealthData(
     val heartRate: Long? = null,
     val heartRateTimestamp: String? = null,
+    val heartRateDevice: String? = null,
     val steps: Long? = null,
     val stepsDate: String? = null,
+    val stepsDevice: String? = null,
     val dataSource: String = "Health Connect"
 )
 

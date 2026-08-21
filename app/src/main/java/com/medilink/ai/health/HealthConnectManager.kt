@@ -20,8 +20,8 @@ import java.util.Locale
  * Dedicated manager class for handling all Health Connect API operations:
  * - Availability checks
  * - Permission verification
- * - Heart Rate reading
- * - Steps aggregation
+ * - Heart Rate reading with origin device detection
+ * - Steps aggregation with origin device detection
  * - Exception and error handling
  */
 class HealthConnectManager(private val context: Context) {
@@ -77,10 +77,26 @@ class HealthConnectManager(private val context: Context) {
     }
 
     /**
-     * Reads the latest Heart Rate record available in Health Connect from the last 7 days.
-     * Returns a Pair of (BPM, FormattedTimestamp) or null if no data exists.
+     * Maps Health Connect package names to user-friendly Smartwatch / Provider brand names.
      */
-    suspend fun readLatestHeartRate(): Pair<Long, String>? {
+    private fun getFriendlyOriginName(packageName: String): String {
+        return when {
+            packageName.contains("sec.android.app.shealth") -> "Samsung Galaxy Watch"
+            packageName.contains("fitbit") -> "Fitbit Smartwatch"
+            packageName.contains("google.android.apps.fitness") -> "Wear OS / Google Fit"
+            packageName.contains("garmin") -> "Garmin Watch"
+            packageName.contains("huawei") -> "Huawei Health Watch"
+            packageName.contains("amazfit") || packageName.contains("zepp") -> "Amazfit / Zepp Watch"
+            packageName.contains("toolbox") -> "Health Connect Simulator"
+            else -> packageName
+        }
+    }
+
+    /**
+     * Reads the latest Heart Rate record available in Health Connect from the last 7 days.
+     * Returns Triple of (BPM, FormattedTimestamp, DeviceName) or null if no data exists.
+     */
+    suspend fun readLatestHeartRate(): Triple<Long, String, String>? {
         val client = getClient() ?: return null
         return try {
             val startTime = Instant.now().minus(7, ChronoUnit.DAYS)
@@ -93,18 +109,19 @@ class HealthConnectManager(private val context: Context) {
 
             val response = client.readRecords(request)
 
-            // Extract samples from records and find the most recent sample by timestamp
-            val latestSampleWithTime = response.records
+            val latestSample = response.records
                 .flatMap { record ->
-                    record.samples.map { sample -> sample to sample.time }
+                    val pkg = record.metadata.dataOrigin.packageName
+                    record.samples.map { sample -> Triple(sample, sample.time, pkg) }
                 }
                 .maxByOrNull { it.second }
 
-            latestSampleWithTime?.let { (sample, time) ->
+            latestSample?.let { (sample, time, pkg) ->
                 val formatter = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a", Locale.getDefault())
                     .withZone(ZoneId.systemDefault())
                 val formattedTime = formatter.format(time)
-                Pair(sample.beatsPerMinute, formattedTime)
+                val deviceName = getFriendlyOriginName(pkg)
+                Triple(sample.beatsPerMinute, formattedTime, deviceName)
             }
         } catch (e: Exception) {
             null
@@ -112,10 +129,10 @@ class HealthConnectManager(private val context: Context) {
     }
 
     /**
-     * Aggregates total step count for today (from 00:00:00 local time until now).
-     * Returns total steps or null if no step records exist.
+     * Aggregates total step count for today (from 00:00:00 local time until now)
+     * and detects the origin watch/app package name.
      */
-    suspend fun readTodaySteps(): Pair<Long, String>? {
+    suspend fun readTodaySteps(): Triple<Long, String, String>? {
         val client = getClient() ?: return null
         return try {
             val startOfDay = ZonedDateTime.now().truncatedTo(ChronoUnit.DAYS).toInstant()
@@ -129,11 +146,22 @@ class HealthConnectManager(private val context: Context) {
             )
 
             val totalSteps = response[StepsRecord.COUNT_TOTAL]
+
+            // Inspect records to extract origin watch/app package
+            val stepRecords = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = StepsRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startOfDay, now)
+                )
+            )
+            val originPkg = stepRecords.records.maxByOrNull { it.endTime }?.metadata?.dataOrigin?.packageName
+            val deviceName = originPkg?.let { getFriendlyOriginName(it) } ?: "Health Connect"
+
             totalSteps?.let { steps ->
                 val formatter = DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault())
                     .withZone(ZoneId.systemDefault())
                 val formattedTime = formatter.format(now)
-                Pair(steps, "Today (as of $formattedTime)")
+                Triple(steps, "Today (as of $formattedTime)", deviceName)
             }
         } catch (e: Exception) {
             null
@@ -141,18 +169,22 @@ class HealthConnectManager(private val context: Context) {
     }
 
     /**
-     * Reads all health data (Heart Rate & Steps) and constructs the HealthData payload.
+     * Reads all health data (Heart Rate & Steps) and constructs the HealthData payload with origin metadata.
      */
     suspend fun fetchHealthData(): HealthData {
         val hrResult = readLatestHeartRate()
         val stepsResult = readTodaySteps()
 
+        val mainSource = hrResult?.third ?: stepsResult?.third ?: "Health Connect"
+
         return HealthData(
             heartRate = hrResult?.first,
             heartRateTimestamp = hrResult?.second,
+            heartRateDevice = hrResult?.third,
             steps = stepsResult?.first,
             stepsDate = stepsResult?.second ?: "Today",
-            dataSource = "Health Connect"
+            stepsDevice = stepsResult?.third,
+            dataSource = mainSource
         )
     }
 }
