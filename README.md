@@ -1,182 +1,160 @@
-# CareLink — AI-Driven Remote Patient Monitoring System
+# MediLink AI — Android Health Connect Prototype
 
-> Full-stack healthcare management platform with role-based portals for Patient, Doctor, Admin, and Lab staff, powered by an AI-based health risk scoring engine.
-
----
-
-## 🚀 Quick Start
-
-### Step 1 — Configure MongoDB
-
-Edit the `.env` file and replace `MONGO_URI` with your MongoDB Atlas connection string:
-
-```
-# Get from: https://cloud.mongodb.com → Your Cluster → Connect → Drivers
-MONGO_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/carelink
-```
-
-> **Note**: If you don't have Atlas yet, create a free account at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas)
-
-### Step 2 — Install Dependencies
-
-```bash
-npm install --legacy-peer-deps
-```
-
-### Step 3 — Seed Demo Data
-
-```bash
-node utils/seed.js
-```
-
-This creates 4 demo users:
-| Role    | Email               | Password |
-|---------|---------------------|----------|
-| Patient | patient@demo.com    | demo123  |
-| Doctor  | doctor@demo.com     | demo123  |
-| Admin   | admin@demo.com      | demo123  |
-| Lab     | lab@demo.com        | demo123  |
-
-### Step 4 — Start the Server
-
-```bash
-# Development (with auto-restart)
-npm run dev
-
-# Production
-npm start
-```
-
-### Step 5 — Open in Browser
-
-```
-http://localhost:5000
-```
+> **MediLink AI** is an Android healthcare application built with **Kotlin** and **Jetpack Compose** that connects directly to **Android Health Connect** to securely read and display a patient's vital health metrics (**Heart Rate** and **Step Count**).
 
 ---
 
-## 🏗️ Project Structure
+## 📋 1. Project Overview
+
+MediLink AI establishes the primary baseline pipeline for reading patient vitals directly from Android's central health data framework, **Health Connect**.
+
+### Exact Prototype Data Scope:
+- **Health Connect Connection**: Availability checking, client initialization, permission contract handling.
+- **❤️ Heart Rate**: Querying latest `HeartRateRecord` samples (BPM and formatted timestamp).
+- **🚶 Steps**: Querying today's aggregated step count using `StepsRecord.COUNT_TOTAL`.
+- **Data Integrity**: **No fake, dummy, or hardcoded values**. If no data exists in Health Connect, explicit empty states are displayed ("No heart-rate data available", "No step data available").
+
+---
+
+## 🛠️ 2. Requirements
+
+- **Operating System**: Windows, macOS, or Linux
+- **IDE**: Android Studio Jellyfish / Koala or newer
+- **Language**: Kotlin 2.0+
+- **UI Framework**: Jetpack Compose (Material3)
+- **Minimum Android Version**: Android 9.0 (API Level 28)
+- **Target Android SDK**: Android 14 (API Level 34)
+- **Health Connect Client**: `androidx.health.connect:connect-client:1.1.0-alpha10`
+
+---
+
+## ⚙️ 3. Android Studio Setup
+
+1. **Clone / Open Repository**:
+   Open the root directory in Android Studio. Android Studio will automatically recognize `settings.gradle.kts` and `app/build.gradle.kts`.
+2. **Gradle Sync**:
+   Allow Android Studio to sync dependencies via Gradle Kotlin DSL.
+3. **JDK Configuration**:
+   Ensure JDK 17 or JDK 21 is selected under **Settings -> Build, Execution, Deployment -> Build Tools -> Gradle -> Gradle JDK**.
+
+---
+
+## 🏥 4. Health Connect Setup
+
+On Android 14+ (API 34+), **Health Connect** is built directly into the operating system settings under **Settings -> Security & Privacy -> Privacy -> Health Connect**.
+
+For Android 9 through Android 13:
+1. Open Google Play Store on the device or emulator.
+2. Search and install **Health Connect by Google**.
+3. Launch Health Connect to complete initial onboarding.
+
+---
+
+## 🔐 5. Required Permissions
+
+MediLink AI requests ONLY the minimum required permissions:
+
+- `android.permission.health.READ_HEART_RATE`: Reads Heart Rate samples in beats per minute.
+- `android.permission.health.READ_STEPS`: Reads step counts aggregated for today.
+
+Permissions are declared in `AndroidManifest.xml` and dynamically requested using the official Health Connect permission contract launcher (`PermissionController.createRequestPermissionResultContract()`).
+
+---
+
+## 🚀 6. How to Run the Application
+
+1. Connect a physical Android device (Android 9+) via USB with USB Debugging enabled, OR start an Android Virtual Device (AVD Emulator) running API 28+.
+2. Select the `app` run configuration in Android Studio.
+3. Click **Run ('Shift + F10')**.
+
+### Expected User Flow:
+1. **Initial Screen**: MediLink AI opens showing the permission prompt screen ("Connect your health data").
+2. **Tap Button**: User taps **[ Connect Health Data ]**.
+3. **System Permission Dialog**: The native Android Health Connect permission modal opens requesting read access to Heart Rate and Steps.
+4. **Grant Access**: User toggles permission switches ON and taps **Allow**.
+5. **Return to App**: MediLink AI displays **✓ Health Connect Connected** status.
+6. **Dashboard Vitals**: The app reads live records from Health Connect and presents Heart Rate (BPM, timestamp, status) and Steps (count, timeframe).
+7. **Refresh Action**: Pressing **[ Refresh Health Data ]** re-executes queries with a progress indicator.
+
+---
+
+## 🔄 7. How the Data Flow Works
 
 ```
-carelink/
-├── .env                        # Environment variables
-├── server.js                   # Express server entry point
-├── package.json
-│
-├── config/
-│   └── db.js                   # MongoDB connection
-│
-├── models/
-│   ├── User.js                 # Patient, Doctor, Admin, Lab
-│   ├── VitalSigns.js           # Heart rate, SpO2, temperature, AI score
-│   ├── Report.js               # Lab reports (3-role workflow)
-│   ├── Alert.js                # Critical, Risk, SOS alerts
-│   └── Medication.js           # Medications + Diet plans
-│
-├── routes/
-│   ├── auth.js                 # POST /login, /register, GET /me
-│   ├── patients.js             # GET/PUT patient data
-│   ├── vitals.js               # POST vitals (triggers AI engine)
-│   ├── ai.js                   # GET AI analysis + 7-day history
-│   ├── reports.js              # Lab report upload/review
-│   ├── alerts.js               # Alert feed + SOS
-│   ├── medication.js           # Medications + diet plans
-│   └── admin.js                # User management + analytics
-│
-├── middleware/
-│   ├── auth.js                 # JWT verification
-│   └── role.js                 # RBAC (role-based access)
-│
-├── utils/
-│   ├── aiEngine.js             # AI risk scoring (rule-based)
-│   └── seed.js                 # Demo data seeder
-│
-├── uploads/                    # Uploaded lab report files
-│
-└── frontend/
-    ├── index.html              # Login / Landing page
-    ├── patient.html            # Patient Portal
-    ├── doctor.html             # Doctor Portal
-    ├── admin.html              # Admin Portal
-    ├── lab.html                # Lab Portal
-    ├── css/
-    │   └── style.css           # Full design system (dark theme)
-    └── js/
-        ├── auth.js             # Shared auth utilities
-        ├── patient.js          # Patient portal logic
-        ├── doctor.js           # Doctor portal logic
-        ├── admin.js            # Admin portal logic
-        └── lab.js              # Lab portal logic
+[ Smartwatch / Wear OS Device ]
+             │
+             ▼
+[ Manufacturer Health App (e.g. Fitbit, Samsung Health, Garmin) ]
+             │
+             ▼
+[ Android Health Connect System Service ]
+             │
+             ▼  (HealthConnectManager.kt / readRecords & aggregate)
+[ MediLink AI Android App ]
+             │
+             ▼  (HealthViewModel.kt / StateFlow)
+[ Jetpack Compose Dashboard UI ]
 ```
 
 ---
 
-## 🤖 AI Risk Engine
+## 🧪 8. How to Test Without a Smartwatch
 
-The AI engine (`utils/aiEngine.js`) is a **rule-based scoring system**:
+You can test MediLink AI on an emulator or physical phone without a smartwatch using sample data:
 
-| Condition            | Score Added | Reason                   |
-|---------------------|-------------|--------------------------|
-| HR > 120 bpm        | +50         | Severe tachycardia        |
-| HR > 100 bpm        | +30         | Elevated heart rate       |
-| HR < 50 bpm         | +30         | Bradycardia               |
-| SpO2 < 90%          | +50         | Severe hypoxia            |
-| SpO2 < 95%          | +25         | Low oxygen saturation     |
-| Temp > 103°F        | +30         | High fever                |
-| Temp > 100°F        | +15         | Mild fever                |
+### Method A: Using Google's Health Connect Toolbox (Recommended)
+1. Download **Health Connect Toolbox** from the Google Play Store or build it from [GitHub - android/health-connect-samples](https://github.com/android/health-connect-samples).
+2. Open Health Connect Toolbox.
+3. Select **Heart Rate**, enter `82` BPM, and tap **Insert Record**.
+4. Select **Steps**, enter `5240` steps, and tap **Insert Record**.
+5. Re-open **MediLink AI** and tap **[ Refresh Health Data ]**. The inserted metrics will immediately display on the dashboard!
 
-**Classification:**
-- 🔴 70–100 → **Critical** — Auto-alert sent
-- 🟡 40–69  → **Risk** — Doctor notified
-- 🟢 0–39   → **Normal** — All stable
+### Method B: Testing Zero-Data Handling
+If no health data exists in Health Connect, MediLink AI will clearly report:
+- ❤️ Heart Rate: `"No heart-rate data available."`
+- 🚶 Steps: `"No step data available."`
 
----
-
-## 🔑 Key API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/login` | Login, returns JWT |
-| POST | `/api/auth/register` | Register new user |
-| POST | `/api/vitals` | Submit vitals → triggers AI |
-| GET | `/api/ai/analyze/:id` | Run AI on latest vitals |
-| GET | `/api/ai/history/:id` | 7-day score trend |
-| POST | `/api/reports/upload` | Upload lab report |
-| PUT | `/api/reports/:id/review` | Doctor reviews report |
-| POST | `/api/alerts/sos` | Patient SOS trigger |
-| PUT | `/api/admin/assign` | Assign doctor to patient |
+MediLink AI **never** fabricates fake health numbers.
 
 ---
 
-## 🛡️ Security
+## ⚠️ 9. Known Limitations
 
-- **JWT** authentication on every API route
-- **bcrypt** password hashing (never stored plain text)
-- **RBAC** — each endpoint checks user role before responding
-- Patients can only access their own data
-- Doctors can only see assigned patients
+- **Local Scope**: Data is currently stored only in in-memory UI state and is not persisted to external servers or cloud storage.
+- **Provider App Requirement**: Requires Health Connect app or provider to be installed on pre-Android 14 devices.
+- **Read-Only**: This version performs read-only operations and does not write back synthetic health records.
 
 ---
 
-## 🌐 Deployment
+## 🌐 10. Future Smartwatch & Ecosystem Architecture
 
-| Service | Platform | Instructions |
-|---------|----------|--------------|
-| Backend | [Render](https://render.com) | Connect GitHub repo, set env vars |
-| Frontend | [Netlify](https://netlify.com) | Drag & drop `frontend/` folder |
-| Database | [MongoDB Atlas](https://cloud.mongodb.com) | Free M0 cluster |
+In future milestones, MediLink AI will expand into a full remote patient monitoring ecosystem:
+
+```
+Smartwatch -> Health Connect -> MediLink AI App -> Node.js Backend -> MongoDB -> AI Health Engine -> Doctor Portal
+```
 
 ---
 
-## 📚 Tech Stack
+## 📱 11. Layout & UI Specification
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | HTML5, CSS3, JavaScript (ES6) |
-| Charts | Chart.js |
-| Backend | Node.js + Express.js |
-| Database | MongoDB + Mongoose ODM |
-| File Storage | Multer (disk storage) |
-| Auth | JWT + bcrypt |
-| Security | RBAC middleware |
-| AI Engine | Rule-based scoring (no ML library) |
+- **Header**: MEDILINK AI | AI-Powered Healthcare
+- **Status Card**: Health Connect | ✓ Connected
+- **Heart Rate Card**: ❤️ HEART RATE | 82 BPM | Last updated: 21 Aug 2026, 01:30 PM | 🟢 Data received
+- **Steps Card**: 🚶 STEPS | 5,240 | Today
+- **Data Source**: Health Connect | AndroidX Client
+- **Buttons**: `[ Refresh Health Data ]` | `[ Health Connect Permissions ]`
+- **Footer**: Connection Status: ✓ Connected
+
+---
+
+## ❓ 12. Troubleshooting
+
+### Issue 1: "Health Connect is not available on this device"
+- **Fix**: Install "Health Connect" from Google Play Store if using Android 13 or lower. Ensure the device is running API 28+.
+
+### Issue 2: "Health data permission was denied"
+- **Fix**: Tap **[ Health Connect Permissions ]** inside MediLink AI or navigate to **Settings -> Apps -> Health Connect -> App permissions -> MediLink AI** and enable Heart Rate and Steps read permissions.
+
+### Issue 3: "No heart-rate data available"
+- **Fix**: Use Health Connect Toolbox or a paired health app (Fitbit, Google Fit, Samsung Health) to log at least one heart rate record in Health Connect.

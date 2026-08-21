@@ -20,3 +20,13 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Android & Gradle
+.gradle/
+build/
+app/build/
+*.apk
+*.aar
+local.properties
+capture/
+
