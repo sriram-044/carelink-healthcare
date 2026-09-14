@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CareLink — Doctor Portal</title>
   <meta name="description" content="CareLink Doctor Portal: Monitor patients, review AI risk scores, manage lab reports and alerts." />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="css/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -61,6 +62,10 @@
         </div>
         <div class="topbar-right">
           <div id="currentDateTime" style="font-size:13px;color:var(--text-muted)"></div>
+          <button class="btn-wearable-toggle" id="btnToggleWearable" title="Toggle Wearable Vitals Simulator">
+            <i class="fa-solid fa-clock"></i>
+            <span>Wearable Sync</span>
+          </button>
         </div>
       </div>
 
@@ -264,15 +269,24 @@
         <section id="section-reports" class="hidden">
           <div class="card" style="margin-bottom:20px">
             <div class="card-header">
-              <div class="card-title">📋 Reports Review Queue</div>
-              <span id="pendingCount" class="badge badge-pending">0 pending</span>
+              <div>
+                <div class="card-title">📋 Diagnostic &amp; Lab Reports Queue</div>
+                <div style="font-size:13px;color:var(--text-muted);margin-top:2px">Review lab tests, radiology, cardiology scans, and EHR reports</div>
+              </div>
+              <div style="display:flex;gap:10px;align-items:center">
+                <span id="pendingCount" class="badge badge-pending">0 pending</span>
+                <button class="btn btn-primary btn-sm" onclick="openDocOrderTestModal()">
+                  + Order Lab Test
+                </button>
+              </div>
             </div>
             <div style="display:flex;gap:12px;flex-wrap:wrap">
               <select class="form-select" id="reportStatusFilter" onchange="loadDoctorReports()" style="width:auto">
                 <option value="">All Status</option>
-                <option value="Pending">Pending</option>
-                <option value="Reviewed">Reviewed</option>
-                <option value="Flagged">Flagged</option>
+                <option value="Pending">Pending Review</option>
+                <option value="Reviewed">Reviewed / Verified</option>
+                <option value="Published">Published in EHR</option>
+                <option value="Flagged">Flagged Abnormal</option>
               </select>
             </div>
           </div>
@@ -296,6 +310,72 @@
 
       </div>
     </main>
+  </div>
+
+  <!-- ORDER LAB TEST MODAL -->
+  <div id="docOrderTestModal" class="modal-overlay hidden">
+    <div class="modal" style="width:min(600px,95vw)">
+      <div class="modal-header">
+        <div class="modal-title">📋 Order Diagnostic / Laboratory Test</div>
+        <button class="modal-close" onclick="closeDocOrderTestModal()">✕</button>
+      </div>
+      <form onsubmit="handleDocSubmitTestOrder(event)">
+        <div class="form-group">
+          <label class="form-label">Select Patient *</label>
+          <select id="docReqPatient" class="form-select" required>
+            <option value="">-- Choose Patient --</option>
+          </select>
+        </div>
+        <div class="grid-2" style="gap:12px">
+          <div class="form-group">
+            <label class="form-label">Category *</label>
+            <select id="docReqCategory" class="form-select" required onchange="onDocCategoryChange(this.value)">
+              <option value="Laboratory">🩸 Laboratory</option>
+              <option value="Radiology">🩻 Radiology</option>
+              <option value="Cardiology">❤️ Cardiology</option>
+              <option value="Neurology">🧠 Neurology</option>
+              <option value="Pathology">🔬 Pathology</option>
+              <option value="Diagnostic">🫁 Diagnostic</option>
+              <option value="Clinical">🩺 Clinical</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Priority *</label>
+            <select id="docReqPriority" class="form-select" required>
+              <option value="Normal">🟢 Normal</option>
+              <option value="Urgent">🟡 Urgent</option>
+              <option value="Critical">🔴 Critical</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Test Name *</label>
+          <input type="text" id="docReqTestName" class="form-input" placeholder="e.g. Complete Blood Count (CBC)" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Clinical Indication &amp; Instructions for Lab</label>
+          <textarea id="docReqNotes" class="form-textarea" rows="2" placeholder="Clinical reason for ordering test..."></textarea>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button type="submit" class="btn btn-primary" style="flex:1">Send Order to Laboratory</button>
+          <button type="button" class="btn btn-ghost" onclick="closeDocOrderTestModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MULTI-FORMAT REPORT VIEWER MODAL -->
+  <div id="docViewerModal" class="modal-overlay hidden">
+    <div class="modal viewer-modal-dialog">
+      <div class="viewer-header">
+        <div>
+          <div style="font-size:16px;font-weight:700" id="docViewerTitle">Report Details</div>
+          <div style="font-size:12px;color:var(--text-muted)" id="docViewerSubtitle">Diagnostic Data</div>
+        </div>
+        <button class="modal-close" onclick="closeDocViewerModal()">✕</button>
+      </div>
+      <div class="viewer-body" id="docViewerBody"></div>
+    </div>
   </div>
 
   <!-- REVIEW REPORT MODAL -->
@@ -325,6 +405,31 @@
     </div>
   </div>
 
+  <!-- DOCTOR EMERGENCY CASE MODAL -->
+  <div id="docEmergencyCaseModal" class="modal-overlay hidden">
+    <div class="modal" style="width:min(720px,95vw)">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:22px;">🚨</span>
+          <div>
+            <div class="modal-title" id="docEmgCaseTitle" style="color:#ff4d4d;">Emergency SOS Incident</div>
+            <div style="font-size:12px; color:var(--text-muted);" id="docEmgCaseSub">Case details &amp; responder telemetry</div>
+          </div>
+        </div>
+        <button class="modal-close" onclick="closeDocEmergencyCaseModal()">✕</button>
+      </div>
+      <div id="docEmgCaseBody" style="max-height:70vh; overflow-y:auto; padding-right:4px;">
+        <div class="loading-spinner"></div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:16px; border-top:1px solid var(--border); padding-top:14px;">
+        <button class="btn btn-warning btn-sm" id="btnDocAcknowledgeCase" onclick="docAcknowledgeCurrentCase()" style="flex:1;">
+          👁️ Acknowledge Emergency
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="closeDocEmergencyCaseModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PATIENT DETAIL MODAL -->
   <div id="patientModal" class="modal-overlay hidden">
     <div class="modal" style="width:min(700px,95vw)">
@@ -336,8 +441,117 @@
     </div>
   </div>
 
+  <!-- ═══ WEARABLE TELEMETRY SIMULATOR DRAWER ═══ -->
+  <aside id="wearableSimulatorDrawer" class="wearable-drawer hidden">
+    <div class="wearable-drawer-header">
+      <div class="wearable-drawer-title">
+        <i class="fa-solid fa-satellite-dish"></i> Wearable Telemetry Streamer
+      </div>
+      <button class="wearable-drawer-close" id="btnCloseDrawer" title="Close">✕</button>
+    </div>
+
+    <div class="wearable-drawer-body">
+      <!-- Device Pairing Card -->
+      <div class="wearable-device-card">
+        <div class="device-icon">
+          <i class="fa-brands fa-apple"></i>
+        </div>
+        <div class="device-details">
+          <div class="device-name">Apple Watch Series 9 &amp; Dexcom G7</div>
+          <div class="device-status">
+            <span class="status-indicator-dot"></span> Connected &amp; Paired
+          </div>
+        </div>
+        <div class="device-battery">
+          <i class="fa-solid fa-battery-three-quarters"></i> 84%
+        </div>
+      </div>
+
+      <!-- ECG Live Monitor Card -->
+      <div class="wearable-ecg-card">
+        <div class="ecg-header">
+          <span class="ecg-title">Lead II ECG Rhythm</span>
+          <span class="ecg-badge" id="ecgRhythmLabel">Normal Sinus</span>
+        </div>
+        <div class="ecg-canvas-wrapper">
+          <canvas id="liveECGCanvas" width="340" height="90"></canvas>
+        </div>
+      </div>
+
+      <!-- Telemetry Sliders Section -->
+      <div class="wearable-section-title">REAL-TIME VITALS INJECTION</div>
+
+      <!-- Heart Rate -->
+      <div class="vitals-slider-group">
+        <div class="slider-header">
+          <span class="slider-label">❤️ Heart Rate</span>
+          <span class="slider-val" id="simHRVal">78 bpm</span>
+        </div>
+        <input type="range" id="simHR" min="35" max="190" value="78" class="vitals-range" />
+      </div>
+
+      <!-- SpO2 -->
+      <div class="vitals-slider-group">
+        <div class="slider-header">
+          <span class="slider-label">🫁 SpO2 Oxygen</span>
+          <span class="slider-val" id="simSpO2Val">98 %</span>
+        </div>
+        <input type="range" id="simSpO2" min="70" max="100" value="98" class="vitals-range" />
+      </div>
+
+      <!-- Blood Pressure (Systolic / Diastolic side-by-side) -->
+      <div class="vitals-grid-2">
+        <div class="vitals-slider-group">
+          <div class="slider-header">
+            <span class="slider-label">Sys BP</span>
+            <span class="slider-val" id="simSysVal">122</span>
+          </div>
+          <input type="range" id="simSysBP" min="70" max="220" value="122" class="vitals-range" />
+        </div>
+        <div class="vitals-slider-group">
+          <div class="slider-header">
+            <span class="slider-label">Dia BP</span>
+            <span class="slider-val" id="simDiaVal">80</span>
+          </div>
+          <input type="range" id="simDiaBP" min="40" max="130" value="80" class="vitals-range" />
+        </div>
+      </div>
+
+      <!-- Blood Glucose -->
+      <div class="vitals-slider-group">
+        <div class="slider-header">
+          <span class="slider-label">🩸 Blood Glucose</span>
+          <span class="slider-val" id="simGlucoseVal">115 mg/dL</span>
+        </div>
+        <input type="range" id="simGlucose" min="40" max="350" value="115" class="vitals-range" />
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="wearable-btn-row">
+        <button class="btn-push-vitals" id="btnPushReading">
+          <i class="fa-solid fa-cloud-arrow-up"></i> Push Vital Ingestion
+        </button>
+        <button class="btn-auto-stream" id="btnAutoStreamToggle">
+          <i class="fa-solid fa-play"></i> <span id="autoStreamText">Start Auto Stream</span>
+        </button>
+      </div>
+
+      <!-- Clinical Crisis Simulation -->
+      <div class="crisis-section">
+        <div class="crisis-section-title">Simulate Clinical Crisis (Doctor / ER Alert Test):</div>
+        <button class="btn-crisis btn-crisis-tachy" id="btnSpikeTachycardia">
+          <i class="fa-solid fa-heart-pulse"></i> Tachycardia &amp; Hypoxia
+        </button>
+        <button class="btn-crisis btn-crisis-htn" id="btnSpikeHTN">
+          <i class="fa-solid fa-bolt"></i> Hypertensive Crisis
+        </button>
+      </div>
+    </div>
+  </aside>
+
   <div class="toast-container" id="toastContainer"></div>
   <script src="js/auth.js"></script>
   <script src="js/doctor.js"></script>
+  <script src="js/wearable.js"></script>
 </body>
 </html>

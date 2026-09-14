@@ -436,49 +436,212 @@ async function loadAIAnalysis() {
 }
 
 // ═══════════════════════════
-// REPORTS
+// REPORTS & DIAGNOSTICS
 // ═══════════════════════════
 async function loadDoctorReports() {
   const statusFilter = document.getElementById('reportStatusFilter')?.value;
-  const res = await apiRequest('/reports');
-  if (!res || !res.ok) return;
+  // Fetch from enhanced medical-reports endpoint, with fallback to legacy reports
+  let res = await apiRequest('/medical-reports');
+  let reports = [];
 
-  let reports = res.data;
-  if (statusFilter) reports = reports.filter(r => r.status === statusFilter);
+  if (res?.ok && res.data?.length > 0) {
+    reports = res.data;
+  } else {
+    const legacyRes = await apiRequest('/reports');
+    if (legacyRes?.ok) reports = legacyRes.data;
+  }
 
-  const pending = reports.filter(r => r.status === 'Pending').length;
+  if (statusFilter) {
+    reports = reports.filter(r => (r.reportStatus === statusFilter || r.status === statusFilter));
+  }
+
+  const pending = reports.filter(r => (r.reportStatus === 'Pending' || r.reportStatus === 'Uploaded' || r.status === 'Pending')).length;
   document.getElementById('pendingCount').textContent = `${pending} pending`;
 
   const container = document.getElementById('doctorReportsList');
   if (!reports.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No reports found</div></div>';
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No diagnostic or lab reports found in queue</div></div>';
     return;
   }
 
   container.innerHTML = reports.map(r => `
-    <div class="card">
+    <div class="card" style="border: 1px solid ${r.criticalStatus === 'Critical' ? 'rgba(255,71,87,0.4)' : 'var(--border)'}">
       <div style="display:flex;gap:14px;align-items:flex-start">
-        <div class="report-type-icon">${getReportEmoji(r.reportType)}</div>
+        <div class="report-type-icon">${getReportEmoji(r.reportType || r.category)}</div>
         <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
             <div style="font-size:15px;font-weight:700">${r.patientId?.name || 'Patient'}</div>
-            ${getStatusBadge(r.status)}
+            <span class="badge-category">${r.category || 'Laboratory'}</span>
+            ${r.criticalStatus ? `<span class="badge ${r.criticalStatus === 'Critical' ? 'badge-critical' : (r.criticalStatus === 'Normal' ? 'badge-normal' : 'badge-risk')}">${r.criticalStatus === 'Critical' ? '🔴' : (r.criticalStatus === 'Normal' ? '🟢' : '🟡')} ${r.criticalStatus}</span>` : ''}
+            ${getStatusBadge(r.reportStatus || r.status)}
           </div>
-          <div style="font-size:13px;color:var(--text-muted)">${getReportTypeLabel(r.reportType)} • ${r.labName || '—'} • ${formatDate(r.testDate)}</div>
-          ${r.patientNote ? `<div style="font-size:13px;color:var(--text-secondary);margin-top:8px;background:rgba(255,255,255,0.03);padding:10px;border-radius:8px">📝 "${r.patientNote}"</div>` : ''}
+          <div style="font-size:13px;color:var(--text-muted)">
+            <strong>${r.reportType}</strong> • ${r.labName || 'CareLink Diagnostics'} • ${formatDate(r.testDate)} • <span class="badge-format">${r.fileFormat || 'PDF'}</span>
+          </div>
+
+          <!-- Structured parameter quick highlight if present -->
+          ${(r.structuredResults && r.structuredResults.length > 0) ? `
+            <div style="margin-top:8px;background:var(--bg-card2);padding:8px 12px;border-radius:6px;font-size:12px;display:flex;gap:12px;flex-wrap:wrap">
+              ${r.structuredResults.slice(0, 4).map(p => `
+                <span><strong>${p.parameter}:</strong> <span style="color:${p.status === 'Critical' ? 'var(--danger)' : (p.status === 'Normal' ? 'var(--primary)' : 'var(--warning)')}">${p.value} ${p.unit || ''}</span></span>
+              `).join('')}
+              ${r.structuredResults.length > 4 ? `<span style="color:var(--text-muted)">+${r.structuredResults.length - 4} more</span>` : ''}
+            </div>
+          ` : ''}
+
+          <!-- AI Clinical summary -->
+          ${r.aiAnalysis?.summary ? `
+            <div style="font-size:12px;color:var(--primary);margin-top:6px;background:rgba(0,212,170,0.06);padding:8px 12px;border-radius:6px">
+              🤖 <strong>AI Summary:</strong> ${r.aiAnalysis.summary}
+            </div>
+          ` : ''}
+
+          ${r.patientNote ? `<div style="font-size:13px;color:var(--text-secondary);margin-top:8px;background:rgba(255,255,255,0.03);padding:10px;border-radius:8px">📝 Patient Note: "${r.patientNote}"</div>` : ''}
           ${r.doctorComment ? `<div style="font-size:13px;color:var(--primary);margin-top:8px">✅ Your review: ${r.doctorComment}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
-          <div style="font-size:11px;color:var(--text-muted)">${timeAgo(r.createdAt)}</div>
-          ${r.status === 'Pending' ? `
+          <div style="font-size:11px;color:var(--text-muted)">${timeAgo(r.createdAt || r.uploadDate)}</div>
+          <button class="btn btn-ghost btn-sm" onclick="openDocReportViewer('${r._id}')">👁️ View Full Report</button>
+          ${(r.reportStatus === 'Pending' || r.reportStatus === 'Uploaded' || r.status === 'Pending') ? `
             <button class="btn btn-primary btn-sm" onclick="openReviewModal('${r._id}','${r.patientId?.name || 'Patient'}','${r.reportType}','${(r.patientNote || '').replace(/'/g, "\\'")}')">
               Review
-            </button>` : `<button class="btn btn-ghost btn-sm" onclick="openReviewModal('${r._id}','${r.patientId?.name || 'Patient'}','${r.reportType}','${(r.patientNote || '').replace(/'/g, "\\'")}')">Update</button>`}
-          ${r.fileUrl ? `<a href="${getFileUrl(r.fileUrl)}" target="_blank" class="btn btn-ghost btn-sm">📥 View File</a>` : ''}
+            </button>` : `<button class="btn btn-ghost btn-sm" onclick="openReviewModal('${r._id}','${r.patientId?.name || 'Patient'}','${r.reportType}','${(r.patientNote || '').replace(/'/g, "\\'")}')">Update Review</button>`}
         </div>
       </div>
     </div>
   `).join('');
+}
+
+function openDocReportViewer(reportId) {
+  const modal = document.getElementById('docViewerModal');
+  const body = document.getElementById('docViewerBody');
+  body.innerHTML = '<div class="loading-spinner"></div>';
+  modal.classList.remove('hidden');
+
+  apiRequest(`/medical-reports/${reportId}`).then(res => {
+    if (!res?.ok) {
+      body.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><div class="empty-text">Failed to load report</div></div>';
+      return;
+    }
+    const r = res.data;
+    document.getElementById('docViewerTitle').textContent = `${r.reportType} (${r.reportId || 'Report'})`;
+    document.getElementById('docViewerSubtitle').textContent = `${r.patientId?.name || 'Patient'} • ${r.category} • ${formatDate(r.testDate)}`;
+
+    const fileViewUrl = `${API_BASE}/medical-reports/${r._id}/view`;
+    const format = (r.fileFormat || '').toUpperCase();
+
+    let fileHtml = '';
+    if (format === 'PDF') {
+      fileHtml = `<iframe src="${fileViewUrl}" style="width:100%;height:400px;border:none;border-radius:8px"></iframe>`;
+    } else if (['PNG', 'JPG', 'JPEG', 'TIFF'].includes(format)) {
+      fileHtml = `<div style="text-align:center;background:#050b14;padding:16px;border-radius:8px"><img src="${fileViewUrl}" style="max-height:360px;max-width:100%;object-fit:contain" /></div>`;
+    } else {
+      fileHtml = `<div style="background:#050b14;padding:16px;border-radius:8px;text-align:center">
+        <div style="font-size:32px">📄</div>
+        <div style="font-weight:700">${r.originalFileName || r.reportType}</div>
+        <div style="font-size:12px;color:var(--text-muted)">Format: ${format}</div>
+        ${r.fileName ? `<a href="${fileViewUrl}" target="_blank" class="btn btn-primary btn-sm" style="margin-top:10px">Open File in Browser</a>` : ''}
+      </div>`;
+    }
+
+    let structHtml = '';
+    if (r.structuredResults && r.structuredResults.length > 0) {
+      structHtml = `
+        <div style="margin-top:18px">
+          <div style="font-size:14px;font-weight:700;margin-bottom:8px">📊 Quantitative Laboratory Metrics</div>
+          <table class="structured-results-table">
+            <thead>
+              <tr><th>Parameter</th><th>Value</th><th>Unit</th><th>Reference Interval</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              ${r.structuredResults.map(p => `
+                <tr>
+                  <td><strong>${p.parameter}</strong></td>
+                  <td style="font-weight:700;color:${p.status === 'Critical' ? 'var(--danger)' : (p.status === 'Normal' ? 'var(--primary)' : 'var(--warning)')}">${p.value}</td>
+                  <td>${p.unit || '—'}</td>
+                  <td style="color:var(--text-muted)">${p.referenceRange || '—'}</td>
+                  <td><span class="badge ${p.status === 'Critical' ? 'badge-critical' : (p.status === 'Normal' ? 'badge-normal' : 'badge-risk')}">${p.status}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    let aiHtml = '';
+    if (r.aiAnalysis?.summary) {
+      aiHtml = `
+        <div style="margin-top:18px;background:rgba(0,212,170,0.06);border:1px solid rgba(0,212,170,0.25);border-radius:8px;padding:14px">
+          <div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:4px">🤖 AI Non-Diagnostic Clinical Summary</div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.5">${r.aiAnalysis.summary}</div>
+          ${(r.aiAnalysis.abnormalFindings && r.aiAnalysis.abnormalFindings.length > 0) ? `
+            <div style="font-size:12px;color:var(--warning);margin-top:6px">
+              ${r.aiAnalysis.abnormalFindings.map(f => `<div>• ${f}</div>`).join('')}
+            </div>
+          ` : ''}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
+            ⚖️ <em>AI-generated information for clinical review. Doctors remain responsible for medical decisions.</em>
+          </div>
+        </div>
+      `;
+    }
+
+    body.innerHTML = fileHtml + structHtml + aiHtml;
+  });
+}
+
+function closeDocViewerModal() {
+  document.getElementById('docViewerModal').classList.add('hidden');
+}
+
+function openDocOrderTestModal() {
+  const sel = document.getElementById('docReqPatient');
+  if (sel && allPatients.length > 0) {
+    sel.innerHTML = '<option value="">-- Choose Patient --</option>' +
+      allPatients.map(p => `<option value="${p._id}">${p.name} (Age: ${p.age || '—'})</option>`).join('');
+  }
+  document.getElementById('docOrderTestModal').classList.remove('hidden');
+}
+
+function closeDocOrderTestModal() {
+  document.getElementById('docOrderTestModal').classList.add('hidden');
+}
+
+function onDocCategoryChange(cat) {
+  const nameInput = document.getElementById('docReqTestName');
+  const defaults = {
+    Laboratory: 'Complete Blood Count (CBC)',
+    Radiology: 'Chest X-Ray (PA View)',
+    Cardiology: '12-Lead ECG / EKG',
+    Neurology: 'EEG Scan',
+    Pathology: 'Histopathology Biopsy',
+    Diagnostic: 'Pulmonary Function Test (PFT)',
+    Clinical: 'Clinical Review'
+  };
+  if (nameInput) nameInput.value = defaults[cat] || '';
+}
+
+async function handleDocSubmitTestOrder(e) {
+  e.preventDefault();
+  const patientId = document.getElementById('docReqPatient').value;
+  const testCategory = document.getElementById('docReqCategory').value;
+  const priority = document.getElementById('docReqPriority').value;
+  const testName = document.getElementById('docReqTestName').value;
+  const clinicalNotes = document.getElementById('docReqNotes').value;
+
+  const res = await apiRequest('/lab/test-requests', {
+    method: 'POST',
+    body: { patientId, testCategory, priority, testName, clinicalNotes }
+  });
+
+  if (res?.ok) {
+    showToast('Diagnostic test ordered! Forwarded to Laboratory Portal.', 'success');
+    closeDocOrderTestModal();
+    e.target.reset();
+  } else {
+    showToast(res?.data?.message || 'Failed to order test', 'error');
+  }
 }
 
 function openReviewModal(id, patientName, type, note) {
@@ -501,6 +664,12 @@ async function submitReview(status) {
   const comment = document.getElementById('reviewComment').value;
   const severity = document.getElementById('reviewSeverity').value;
   if (!comment.trim()) { showToast('Please enter a clinical comment', 'warning'); return; }
+
+  // Update MedicalReport and legacy Report
+  await apiRequest(`/medical-reports/${currentReportId}/review`, {
+    method: 'PUT',
+    body: { doctorComment: comment, severity }
+  });
 
   const res = await apiRequest(`/reports/${currentReportId}/review`, {
     method: 'PUT',
@@ -536,23 +705,36 @@ async function loadDocAlerts() {
   }
 
   container.innerHTML = alerts.map(a => `
-    <div class="card" style="border-left:3px solid ${a.type === 'Critical' || a.type === 'SOS' ? 'var(--status-critical)' : 'var(--status-risk)'}">
-      <div style="display:flex;align-items:flex-start;gap:14px">
+    <div class="card" style="border-left:4px solid ${a.type === 'Critical' || a.type === 'SOS' ? 'var(--status-critical)' : 'var(--status-risk)'}; background: ${a.type === 'SOS' ? 'rgba(255,71,87,0.06)' : 'var(--bg-card)'};">
+      <div style="display:flex;align-items:flex-start;gap:14px; flex-wrap:wrap;">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
             ${getStatusBadge(a.type)}
-            <span style="font-size:13px;font-weight:600">${a.patientId?.name || 'Unknown'}</span>
+            <span style="font-size:15px;font-weight:700; color:var(--text-primary);">${a.patientId?.name || 'Unknown'}</span>
+            ${a.emergencyStatus ? `<span class="badge-status-${a.emergencyStatus.toLowerCase().replace(/ /g, '-')}">${a.emergencyStatus}</span>` : ''}
             ${a.resolved ? '<span class="badge badge-reviewed">✅ Resolved</span>' : ''}
           </div>
-          <div style="font-size:14px;color:var(--text-primary);margin-bottom:6px">${a.message}</div>
+          <div style="font-size:14px;color:var(--text-primary);margin-bottom:6px; font-weight:500;">${a.message}</div>
+          <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--text-muted);">
+            <div>📍 Location: <strong style="color:var(--primary);">${a.location || 'Home'}</strong></div>
+            <div>🩸 Blood: <strong>${a.patientId?.bloodGroup || '—'}</strong></div>
+            <div>👨‍👩‍👧 Family: <strong>${a.patientId?.emergencyContact || '—'}</strong></div>
+          </div>
           ${a.vitals ? `
-            <div style="font-size:12px;color:var(--text-muted)">
-              HR: ${a.vitals.heartRate}bpm • SpO2: ${a.vitals.spo2}% • Temp: ${a.vitals.temperature}°F
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:6px;">
+              HR: ${a.vitals.heartRate || '—'} bpm • SpO2: ${a.vitals.spo2 || '—'}% • Temp: ${a.vitals.temperature || '—'}°F
             </div>` : ''}
-          ${a.reasons?.length ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px">${a.reasons.slice(0,2).join(' • ')}</div>` : ''}
-          <div style="font-size:11px;color:var(--text-muted);margin-top:6px">${formatDateTime(a.createdAt)}</div>
+          ${a.reasons?.length ? `<div style="font-size:12px;color:#ff6b6b;margin-top:4px;">⚠️ ${a.reasons.slice(0,2).join(' • ')}</div>` : ''}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">${formatDateTime(a.createdAt)}</div>
         </div>
-        ${!a.resolved ? `<button class="btn btn-ghost btn-sm" onclick="resolveAlert('${a._id}')">Mark Resolved</button>` : ''}
+        <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+          ${a.emergencyCaseId ? `
+            <button class="btn btn-danger btn-sm" onclick="openDocEmergencyCaseModal('${a.emergencyCaseId}')" style="font-weight:700;">
+              🚨 View Case &amp; Location
+            </button>
+          ` : ''}
+          ${!a.resolved ? `<button class="btn btn-ghost btn-sm" onclick="resolveAlert('${a._id}')">Mark Resolved</button>` : ''}
+        </div>
       </div>
     </div>
   `).join('');
@@ -564,6 +746,136 @@ async function resolveAlert(id) {
     showToast('Alert resolved', 'success');
     loadDocAlerts();
     loadDashboard();
+  }
+}
+
+let currentDocViewingEmergencyCaseId = null;
+
+async function openDocEmergencyCaseModal(caseId) {
+  currentDocViewingEmergencyCaseId = caseId;
+  const modal = document.getElementById('docEmergencyCaseModal');
+  const body = document.getElementById('docEmgCaseBody');
+  if (!modal || !body) return;
+
+  modal.classList.remove('hidden');
+  body.innerHTML = '<div class="loading-spinner"></div>';
+
+  const res = await apiRequest(`/emergency/cases/${caseId}`);
+  if (!res || !res.ok) {
+    body.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Failed to load emergency case details</div></div>';
+    return;
+  }
+
+  const emg = res.data;
+  document.getElementById('docEmgCaseTitle').textContent = `🚨 Emergency Case: ${emg.emergencyId} (${emg.patientName})`;
+  document.getElementById('docEmgCaseSub').textContent = `Status: ${emg.status} • Priority: ${emg.priority} • Triggered: ${formatDateTime(emg.triggeredAt)}`;
+
+  const btnAck = document.getElementById('btnDocAcknowledgeCase');
+  if (btnAck) {
+    btnAck.style.display = emg.status === 'ACTIVE' ? 'block' : 'none';
+  }
+
+  const isLocationAvailable = emg.location?.isAvailable;
+  const locationText = isLocationAvailable
+    ? (emg.location.address || `GPS: ${emg.location.latitude?.toFixed(5)}, ${emg.location.longitude?.toFixed(5)}`)
+    : 'Location coordinates unavailable at trigger time';
+
+  const mapsUrl = isLocationAvailable && emg.location.latitude && emg.location.longitude
+    ? `https://maps.google.com/?q=${emg.location.latitude},${emg.location.longitude}`
+    : null;
+
+  body.innerHTML = `
+    <!-- Key Clinical Summary Grid -->
+    <div class="grid-2" style="gap:14px; margin-bottom:16px;">
+      <div class="card" style="background:rgba(255,71,87,0.06); padding:12px 14px;">
+        <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; font-weight:700;">Patient Identity</div>
+        <div style="font-size:15px; font-weight:700; color:var(--text-primary); margin-top:2px;">
+          ${emg.patientName} (${emg.patientId?.age || '—'} yrs / ${emg.patientId?.gender || '—'})
+        </div>
+        <div style="font-size:13px; color:var(--text-secondary); margin-top:2px;">
+          🩸 Blood Group: <strong style="color:#ff4d4d;">${emg.patientId?.bloodGroup || '—'}</strong> • 📞 ${emg.patientId?.phone || '—'}
+        </div>
+      </div>
+
+      <div class="card" style="background:rgba(0,212,170,0.06); padding:12px 14px;">
+        <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; font-weight:700;">GPS Location Telemetry</div>
+        <div style="font-size:14px; font-weight:700; color:var(--primary); margin-top:2px;">
+          📍 ${locationText}
+        </div>
+        ${mapsUrl ? `
+          <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="font-size:12px; color:var(--primary); text-decoration:underline; display:inline-block; margin-top:4px;">
+            🗺️ Open Live Coordinates in Google Maps ➔
+          </a>
+        ` : ''}
+      </div>
+    </div>
+
+    <!-- Assigned Response Team & Doctor -->
+    <div class="grid-2" style="gap:14px; margin-bottom:16px;">
+      <div>
+        <div style="font-size:12px; color:var(--text-muted);">Assigned Response Team:</div>
+        <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-top:2px;">
+          ${emg.assignedEmergencyTeam?.teamName ? `🚑 ${emg.assignedEmergencyTeam.teamName} (${emg.assignedEmergencyTeam.vehicleType || 'ALS Ambulance'})` : '<span style="color:var(--warning);">⏳ Awaiting Emergency Team Assignment</span>'}
+        </div>
+        ${emg.assignedEmergencyTeam?.contactPhone ? `<div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Contact: ${emg.assignedEmergencyTeam.contactPhone} • Lead: ${emg.assignedEmergencyTeam.leadResponder}</div>` : ''}
+      </div>
+      <div>
+        <div style="font-size:12px; color:var(--text-muted);">Emergency Contacts on File:</div>
+        <div style="font-size:13px; color:var(--text-secondary); margin-top:2px;">
+          ${emg.emergencyContacts?.map(c => `<div>👨‍👩‍👧 ${c.name} (${c.relationship}): <strong>${c.phone}</strong></div>`).join('') || 'None listed'}
+        </div>
+      </div>
+    </div>
+
+    <!-- Known Allergies & Medical History (Role-Scoped Clinical View) -->
+    <div class="card mb-16" style="background:rgba(255,255,255,0.03);">
+      <div style="font-size:12px; font-weight:700; color:#ff6b6b; margin-bottom:4px;">⚠️ High-Caution Allergies:</div>
+      <div style="font-size:13px; color:var(--text-primary); margin-bottom:10px;">
+        ${emg.patientId?.allergiesDetail?.map(a => `<span class="badge" style="background:rgba(255,71,87,0.15); color:#ff6b6b; margin-right:4px;">${a.name} (${a.severity})</span>`).join('') || 'No known allergies reported'}
+      </div>
+      <div style="font-size:12px; font-weight:700; color:var(--secondary); margin-bottom:4px;">🩺 Active Diagnoses &amp; Conditions:</div>
+      <div style="font-size:13px; color:var(--text-secondary);">
+        ${emg.patientId?.medicalConditionsDetail?.map(c => `<span class="badge" style="background:rgba(108,99,255,0.15); color:#a29bfe; margin-right:4px;">${c.condition}</span>`).join('') || 'None listed'}
+      </div>
+    </div>
+
+    <!-- Event Timeline Stepper -->
+    <div>
+      <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:6px;">
+        ⏱️ Complete Audit Timeline:
+      </div>
+      <div class="emergency-timeline">
+        ${emg.timeline?.map(t => `
+          <div class="timeline-event-item">
+            <div class="timeline-event-dot ${t.event.includes('CANCEL') ? 'warning' : t.event.includes('RESOLVED') ? 'success' : 'danger'}">
+              ${t.event.includes('CANCEL') ? '✕' : t.event.includes('RESOLVED') ? '✓' : '🚨'}
+            </div>
+            <div class="timeline-event-title">${t.event.replace(/_/g, ' ')}</div>
+            <div class="timeline-event-msg">${t.message}</div>
+            <div class="timeline-event-meta">${formatDateTime(t.timestamp)} • by ${t.performedByName || 'System'} (${t.performedByRole || 'system'})</div>
+          </div>
+        `).join('') || '<div style="font-size:12px; color:var(--text-muted);">No timeline entries</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function closeDocEmergencyCaseModal() {
+  const modal = document.getElementById('docEmergencyCaseModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function docAcknowledgeCurrentCase() {
+  if (!currentDocViewingEmergencyCaseId) return;
+
+  const res = await apiRequest(`/emergency/cases/${currentDocViewingEmergencyCaseId}/acknowledge`, { method: 'POST' });
+  if (res && res.ok) {
+    showToast('Emergency case acknowledged! Response logged in timeline.', 'success');
+    openDocEmergencyCaseModal(currentDocViewingEmergencyCaseId);
+    loadDocAlerts();
+    loadDashboard();
+  } else {
+    showToast(res?.message || 'Failed to acknowledge case', 'error');
   }
 }
 

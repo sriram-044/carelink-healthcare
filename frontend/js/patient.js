@@ -33,7 +33,8 @@ function showSection(section, navEl) {
     appointments: ['Appointments', 'Your upcoming doctor visits'],
     reports: ['Lab Reports', 'Upload and view your medical reports'],
     diet: ['Diet Plan', 'Your personalised nutrition plan'],
-    history: ['Medical History & Profile', 'Complete record of hospital visits, allergies, and pre-existing conditions']
+    history: ['Medical History & Profile', 'Complete record of hospital visits, allergies, and pre-existing conditions'],
+    emergency: ['Emergency SOS Assistance', 'Manage contacts, activate SOS, and track live emergency response']
   };
   document.getElementById('pageTitle').textContent = titles[section][0];
   document.getElementById('pageSubtitle').textContent = titles[section][1];
@@ -43,6 +44,7 @@ function showSection(section, navEl) {
   if (section === 'reports') loadReports();
   if (section === 'diet') loadDietPlan();
   if (section === 'history') loadLifetimeMedicalHistory();
+  if (section === 'emergency') loadPatientEmergencySection();
 }
 
 // ═══════════════════════
@@ -434,35 +436,86 @@ async function markMedTaken(id) {
 }
 
 // ═══════════════════════
-// REPORTS
+// REPORTS & EHR ARCHIVE
 // ═══════════════════════
 async function loadReports() {
-  const res = await apiRequest(`/reports/${currentUser.id}`);
   const list = document.getElementById('reportsList');
+  let reports = [];
 
-  if (!res || !res.ok || !res.data.length) {
-    list.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No reports uploaded yet</div></div>';
+  // Fetch enhanced medical reports
+  const res = await apiRequest('/medical-reports');
+  if (res?.ok && res.data?.length > 0) {
+    reports = res.data;
+  } else {
+    // Fallback to legacy reports endpoint
+    const legacyRes = await apiRequest(`/reports/${currentUser.id}`);
+    if (legacyRes?.ok) reports = legacyRes.data;
+  }
+
+  if (!reports.length) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No diagnostic or laboratory reports available yet</div></div>';
     return;
   }
 
-  list.innerHTML = res.data.map(r => `
-    <div class="report-card">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div class="report-type-icon">${getReportEmoji(r.reportType)}</div>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:600">${getReportTypeLabel(r.reportType)}</div>
-          <div style="font-size:12px;color:var(--text-muted)">${r.labName || 'Lab'} • ${formatDate(r.testDate)}</div>
+  list.innerHTML = reports.map(r => `
+    <div class="report-card" style="border:1px solid ${r.criticalStatus === 'Critical' ? 'rgba(255,71,87,0.4)' : 'var(--border)'}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="report-type-icon">${getReportEmoji(r.reportType || r.category)}</div>
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text-primary)">
+              ${r.reportType || 'Medical Report'}
+            </div>
+            <div style="font-size:12px;color:var(--text-muted)">
+              ${r.category ? `<span class="badge-category" style="margin-right:6px">${r.category}</span>` : ''}
+              ${r.labName || 'CareLink Laboratory'} • ${formatDate(r.testDate)} • <span class="badge-format">${r.fileFormat || 'PDF'}</span>
+            </div>
+          </div>
         </div>
-        ${getStatusBadge(r.status)}
+        <div style="display:flex;align-items:center;gap:6px">
+          ${r.criticalStatus ? `<span class="badge ${r.criticalStatus === 'Critical' ? 'badge-critical' : (r.criticalStatus === 'Normal' ? 'badge-normal' : 'badge-risk')}">${r.criticalStatus}</span>` : ''}
+          ${getStatusBadge(r.reportStatus || r.status)}
+        </div>
       </div>
-      ${r.patientNote ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">📝 ${r.patientNote}</div>` : ''}
+
+      <!-- Structured test results preview if present -->
+      ${(r.structuredResults && r.structuredResults.length > 0) ? `
+        <div style="margin-top:10px;background:var(--bg-card2);padding:10px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.05)">
+          <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:6px">📊 Quantitative Laboratory Metrics:</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
+            ${r.structuredResults.map(p => `
+              <div style="font-size:11px;background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:4px">
+                <div style="color:var(--text-muted)">${p.parameter}</div>
+                <div style="font-weight:700;color:${p.status === 'Critical' ? 'var(--danger)' : (p.status === 'Normal' ? 'var(--primary)' : 'var(--warning)')}">
+                  ${p.value} ${p.unit || ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- AI Clinical Analysis Preview -->
+      ${r.aiAnalysis?.summary ? `
+        <div style="background:rgba(0,212,170,0.06);border:1px solid rgba(0,212,170,0.18);border-radius:var(--radius-sm);padding:10px 12px;margin-top:10px">
+          <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:2px">🤖 AI Non-Diagnostic Summary:</div>
+          <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">${r.aiAnalysis.summary}</div>
+        </div>
+      ` : ''}
+
+      ${r.patientNote ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:8px">📝 Your Note: "${r.patientNote}"</div>` : ''}
       ${r.doctorComment ? `
-        <div style="background:rgba(0,212,170,0.06);border:1px solid rgba(0,212,170,0.15);border-radius:var(--radius-sm);padding:10px;font-size:12px;margin-top:4px">
-          <div style="color:var(--primary);font-weight:600;margin-bottom:4px">🩺 Doctor's Comment:</div>
-          <div style="color:var(--text-secondary)">${r.doctorComment}</div>
-          ${r.severity ? `<div style="margin-top:6px">${getStatusBadge(r.severity)}</div>` : ''}
+        <div style="background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.2);border-radius:var(--radius-sm);padding:10px;font-size:12px;margin-top:8px">
+          <div style="color:var(--secondary);font-weight:700;margin-bottom:2px">🩺 Doctor's Review:</div>
+          <div style="color:var(--text-primary)">${r.doctorComment}</div>
         </div>` : ''}
-      <div style="font-size:11px;color:var(--text-muted)">${timeAgo(r.createdAt)}</div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04)">
+        <div style="font-size:11px;color:var(--text-muted)">Uploaded: ${timeAgo(r.createdAt || r.uploadDate)}</div>
+        <div style="display:flex;gap:8px">
+          ${r.fileName ? `<a href="${API_BASE}/medical-reports/${r._id}/download" class="btn btn-ghost btn-sm" download>📥 Download File</a>` : ''}
+        </div>
+      </div>
     </div>
   `).join('');
 }
@@ -520,19 +573,622 @@ async function loadDietPlan() {
   `;
 }
 
-// ═══════════════════════
-// SOS
-// ═══════════════════════
-async function triggerSOS() {
-  if (!confirm('⚠️ Are you sure you want to send an emergency SOS alert to your doctor and the admin? This should only be used in a real emergency.')) return;
+// ═══════════════════════════════════════════════════════════════════════════════
+// SOS EMERGENCY SYSTEM (MANUAL SOS, 3s HOLD / 5s COUNTDOWN, CONTACTS, TIMELINE)
+// ═══════════════════════════════════════════════════════════════════════════════
 
-  const res = await apiRequest('/alerts/sos', { method: 'POST' });
-  if (res?.ok) {
-    showToast('🚨 SOS ALERT SENT! Your doctor has been notified immediately.', 'error');
-  } else {
-    showToast('Failed to send SOS. Please call emergency services directly.', 'error');
+let sosCountdownTimer = null;
+let sosCountdownValue = 5;
+let sosHoldStartTime = null;
+let sosHoldAnimId = null;
+const SOS_HOLD_DURATION = 3000; // 3 seconds
+let activeEmergencyCaseId = null;
+let healthWarningTimer = null;
+let healthWarningCountdown = 15;
+let pendingHealthWarningType = 'POSSIBLE_HEALTH_EMERGENCY';
+
+/**
+ * Opens the SOS Confirmation Modal with 3s hold & 5s auto-countdown
+ */
+function openSOSModal() {
+  const modal = document.getElementById('sosConfirmModal');
+  if (!modal) return;
+
+  modal.classList.remove('hidden');
+  resetSOSHoldProgress();
+
+  // Start 5-second auto countdown
+  sosCountdownValue = 5;
+  const numDisplay = document.getElementById('sosCountdownNumber');
+  if (numDisplay) numDisplay.textContent = sosCountdownValue;
+
+  if (sosCountdownTimer) clearInterval(sosCountdownTimer);
+  sosCountdownTimer = setInterval(() => {
+    sosCountdownValue--;
+    if (numDisplay) numDisplay.textContent = Math.max(0, sosCountdownValue);
+    if (sosCountdownValue <= 0) {
+      clearInterval(sosCountdownTimer);
+      sosCountdownTimer = null;
+      executeSOSDispatch('MANUAL_SOS');
+    }
+  }, 1000);
+}
+
+function cancelSOSModal() {
+  if (sosCountdownTimer) {
+    clearInterval(sosCountdownTimer);
+    sosCountdownTimer = null;
+  }
+  stopSOSHold();
+  const modal = document.getElementById('sosConfirmModal');
+  if (modal) modal.classList.add('hidden');
+  showToast('Emergency SOS cancelled. No case created.', 'info');
+}
+
+/**
+ * Interactive 3-second hold button logic with SVG progress circle
+ */
+function startSOSHold(e) {
+  if (e) e.preventDefault();
+  const btn = document.getElementById('sosHoldBtn');
+  const hint = document.getElementById('sosHoldHint');
+  if (btn) btn.classList.add('holding');
+  if (hint) {
+    hint.textContent = 'Keep holding...';
+    hint.style.color = '#ff4d4d';
+  }
+
+  // Stop countdown if user is actively holding
+  if (sosCountdownTimer) {
+    clearInterval(sosCountdownTimer);
+    sosCountdownTimer = null;
+  }
+
+  sosHoldStartTime = performance.now();
+  const circle = document.getElementById('sosHoldProgressCircle');
+
+  const step = (now) => {
+    const elapsed = now - sosHoldStartTime;
+    const progress = Math.min(1, elapsed / SOS_HOLD_DURATION);
+
+    if (circle) {
+      const offset = 440 - (440 * progress);
+      circle.style.strokeDashoffset = offset;
+    }
+
+    if (progress >= 1) {
+      // Completed 3-second hold
+      stopSOSHold();
+      executeSOSDispatch('MANUAL_SOS');
+    } else {
+      sosHoldAnimId = requestAnimationFrame(step);
+    }
+  };
+
+  sosHoldAnimId = requestAnimationFrame(step);
+}
+
+function stopSOSHold(e) {
+  if (sosHoldAnimId) {
+    cancelAnimationFrame(sosHoldAnimId);
+    sosHoldAnimId = null;
+  }
+  const btn = document.getElementById('sosHoldBtn');
+  const hint = document.getElementById('sosHoldHint');
+  if (btn) btn.classList.remove('holding');
+  if (hint) {
+    hint.textContent = 'Press and hold for 3 seconds to confirm';
+    hint.style.color = 'var(--text-muted)';
+  }
+  resetSOSHoldProgress();
+}
+
+function resetSOSHoldProgress() {
+  const circle = document.getElementById('sosHoldProgressCircle');
+  if (circle) circle.style.strokeDashoffset = 440;
+}
+
+/**
+ * Captures Geolocation with a 4-second timeout and graceful fallback
+ */
+async function capturePatientLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      return resolve({ isAvailable: false, latitude: null, longitude: null, address: 'Geolocation unsupported' });
+    }
+
+    const timer = setTimeout(() => {
+      resolve({ isAvailable: false, latitude: null, longitude: null, address: 'Location request timed out' });
+    }, 4000);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(timer);
+        resolve({
+          isAvailable: true,
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: Math.round(pos.coords.accuracy || 10),
+          timestamp: new Date(pos.timestamp || Date.now()),
+          address: `GPS: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`
+        });
+      },
+      (err) => {
+        clearTimeout(timer);
+        console.warn('[GEOLOCATION UNAVAILABLE]', err.message);
+        resolve({ isAvailable: false, latitude: null, longitude: null, address: 'Location permission denied or unavailable' });
+      },
+      { enableHighAccuracy: true, timeout: 3500, maximumAge: 10000 }
+    );
+  });
+}
+
+/**
+ * Dispatches SOS emergency request to backend
+ */
+async function executeSOSDispatch(emergencyType = 'MANUAL_SOS', customLocation = null) {
+  if (sosCountdownTimer) {
+    clearInterval(sosCountdownTimer);
+    sosCountdownTimer = null;
+  }
+  const modal = document.getElementById('sosConfirmModal');
+  if (modal) modal.classList.add('hidden');
+
+  showToast('📡 Capturing location & dispatching emergency alert...', 'info');
+
+  const locationData = customLocation || await capturePatientLocation();
+
+  const payload = {
+    emergencyType,
+    location: locationData,
+    recentHealthData: {
+      source: 'Patient App SOS Button'
+    }
+  };
+
+  try {
+    const res = await apiRequest('/emergency/sos', { method: 'POST', body: payload });
+    if (res && res.ok) {
+      const emg = res.data?.emergencyCase || res.data;
+      activeEmergencyCaseId = emg._id;
+
+      if (res.data?.isDuplicate) {
+        showToast('ℹ️ You already have an active emergency case in progress.', 'warning');
+        showSection('emergency', document.getElementById('navEmergency'));
+        loadPatientEmergencySection();
+        return;
+      }
+
+      // Display SOS Success Modal
+      document.getElementById('sosSuccessId').textContent = emg.emergencyId || 'EMG-ACTIVE';
+      document.getElementById('sosSuccessStatus').textContent = emg.status || 'ACTIVE';
+      document.getElementById('sosSuccessLocation').textContent = emg.location?.isAvailable
+        ? `📍 GPS Shared (${emg.location.latitude?.toFixed(4)}, ${emg.location.longitude?.toFixed(4)})`
+        : '📍 Location Unavailable at Trigger Time';
+
+      const successModal = document.getElementById('sosSuccessModal');
+      if (successModal) successModal.classList.remove('hidden');
+
+      showToast('🚨 SOS ALERT SENT! Emergency contacts, doctor, and hospital notified.', 'error');
+
+      // Refresh emergency views
+      loadPatientEmergencySection();
+    } else {
+      showToast(res?.message || 'Failed to dispatch SOS alert. Please call emergency services.', 'error');
+    }
+  } catch (err) {
+    showToast(`Failed to dispatch SOS: ${err.message}`, 'error');
   }
 }
+
+function closeSOSSuccessModal() {
+  const modal = document.getElementById('sosSuccessModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * Load complete Patient Emergency section
+ */
+async function loadPatientEmergencySection() {
+  await Promise.all([
+    loadPatientActiveEmergency(),
+    loadPatientEmergencyContacts(),
+    loadEmergencyMedicalSummary(),
+    loadPatientEmergencyHistory()
+  ]);
+}
+
+/**
+ * Loads currently active emergency case for this patient
+ */
+async function loadPatientActiveEmergency() {
+  const res = await apiRequest('/emergency/active');
+  const card = document.getElementById('patientActiveEmergencyCard');
+  const body = document.getElementById('activeEmergencyBody');
+  const topbarBtn = document.getElementById('sosBtn');
+
+  if (!res || !res.ok || !res.data || !res.data.length) {
+    if (card) card.classList.add('hidden');
+    if (topbarBtn) {
+      topbarBtn.textContent = '🚨 SOS';
+      topbarBtn.style.animation = 'sos-pulse 2s infinite';
+    }
+    return;
+  }
+
+  const activeCase = res.data[0];
+  activeEmergencyCaseId = activeCase._id;
+
+  if (topbarBtn) {
+    topbarBtn.textContent = `🚨 SOS (${activeCase.status})`;
+    topbarBtn.style.animation = 'sos-pulse 0.8s infinite';
+  }
+
+  if (card && body) {
+    card.classList.remove('hidden');
+    document.getElementById('activeEmergencySub').textContent = `Emergency ID: ${activeCase.emergencyId} • Triggered ${formatDateTime(activeCase.triggeredAt)}`;
+    
+    const badge = document.getElementById('activeEmergencyStatusBadge');
+    if (badge) {
+      badge.className = `badge-status-${activeCase.status.toLowerCase().replace(/_/g, '-')}`;
+      badge.textContent = activeCase.status;
+    }
+
+    const isLocationShared = activeCase.location?.isAvailable;
+    const locationStr = isLocationShared
+      ? (activeCase.location.address || `GPS: ${activeCase.location.latitude?.toFixed(4)}, ${activeCase.location.longitude?.toFixed(4)}`)
+      : 'Current location is unavailable';
+
+    body.innerHTML = `
+      <div class="grid-2" style="gap:16px; margin-top:14px;">
+        <div>
+          <div style="font-size:12px; color:var(--text-muted);">Emergency Type / Priority</div>
+          <div style="font-size:15px; font-weight:700; color:#ff4d4d; margin-top:2px;">
+            ${activeCase.emergencyType} • <span class="priority-indicator-critical">${activeCase.priority}</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px; color:var(--text-muted);">Location Status</div>
+          <div style="font-size:14px; font-weight:600; color:var(--primary); margin-top:2px;">
+            📍 ${locationStr}
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px; color:var(--text-muted);">Assigned Response Team</div>
+          <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-top:2px;">
+            ${activeCase.assignedEmergencyTeam?.teamName ? `🚑 ${activeCase.assignedEmergencyTeam.teamName} (${activeCase.assignedEmergencyTeam.vehicleType || 'Ambulance'})` : '⏳ Dispatching Emergency Team...'}
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px; color:var(--text-muted);">Assigned Doctor</div>
+          <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-top:2px;">
+            🩺 ${activeCase.assignedDoctor?.name || 'On-Call ER Physician'}
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Stepper Timeline -->
+      <div style="margin-top:18px;">
+        <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:6px;">
+          ⏱️ Incident Timeline:
+        </div>
+        <div class="emergency-timeline">
+          ${activeCase.timeline?.map(t => `
+            <div class="timeline-event-item">
+              <div class="timeline-event-dot ${t.event.includes('CANCEL') ? 'warning' : t.event.includes('RESOLVED') ? 'success' : 'danger'}">
+                ${t.event.includes('CANCEL') ? '✕' : t.event.includes('RESOLVED') ? '✓' : '🚨'}
+              </div>
+              <div class="timeline-event-title">${t.event.replace(/_/g, ' ')}</div>
+              <div class="timeline-event-msg">${t.message}</div>
+              <div class="timeline-event-meta">${formatDateTime(t.timestamp)} • by ${t.performedByName || 'System'}</div>
+            </div>
+          `).join('') || '<div style="font-size:12px; color:var(--text-muted);">No timeline entries</div>'}
+        </div>
+      </div>
+    `;
+  }
+}
+
+/**
+ * Loads emergency contacts list
+ */
+async function loadPatientEmergencyContacts() {
+  const container = document.getElementById('patientEmergencyContactsList');
+  if (!container) return;
+
+  const res = await apiRequest('/emergency/contacts');
+  if (!res || !res.ok || !res.data || !res.data.length) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding:24px 0;">
+        <div class="empty-icon">👨‍👩‍👧</div>
+        <div class="empty-text">No emergency contacts configured yet.</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddContactModal()" style="margin-top:10px;">+ Add Primary Contact</button>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = res.data.map(c => `
+    <div class="emergency-contact-card ${c.isPrimary ? 'is-primary' : ''}">
+      <div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <strong style="font-size:15px; color:var(--text-primary);">${c.name}</strong>
+          <span class="badge" style="background:rgba(255,255,255,0.06); font-size:11px;">${c.relationship}</span>
+          ${c.isPrimary ? '<span class="badge badge-normal" style="font-weight:700;">★ PRIMARY</span>' : ''}
+        </div>
+        <div style="font-size:13px; color:var(--text-secondary); margin-top:4px;">
+          📞 <strong>${c.phone}</strong> ${c.email ? `• ✉️ ${c.email}` : ''}
+        </div>
+      </div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        ${!c.isPrimary ? `<button class="btn btn-ghost btn-sm" onclick="setPrimaryEmergencyContact('${c._id}')" title="Set as Primary">★ Set Primary</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="openEditContactModal('${c._id}', '${escapeHtml(c.name)}', '${escapeHtml(c.relationship)}', '${escapeHtml(c.phone)}', '${escapeHtml(c.email || '')}', '${c.priority || 'Secondary'}', ${Boolean(c.isPrimary)})">✏️ Edit</button>
+        <button class="btn btn-ghost btn-sm" style="color:#ff6b6b;" onclick="deleteEmergencyContact('${c._id}')">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+function openAddContactModal() {
+  document.getElementById('emergencyContactModalTitle').textContent = '👨‍👩‍👧 Add Emergency Contact';
+  document.getElementById('contactEditId').value = '';
+  document.getElementById('contactName').value = '';
+  document.getElementById('contactRelationship').value = 'Family (Daughter / Son)';
+  document.getElementById('contactPhone').value = '';
+  document.getElementById('contactEmail').value = '';
+  document.getElementById('contactPriority').value = 'Secondary';
+  document.getElementById('contactIsPrimary').checked = false;
+  document.getElementById('emergencyContactModal').classList.remove('hidden');
+}
+
+function openEditContactModal(id, name, relationship, phone, email, priority, isPrimary) {
+  document.getElementById('emergencyContactModalTitle').textContent = '✏️ Edit Emergency Contact';
+  document.getElementById('contactEditId').value = id;
+  document.getElementById('contactName').value = name;
+  document.getElementById('contactRelationship').value = relationship || 'Family (Daughter / Son)';
+  document.getElementById('contactPhone').value = phone;
+  document.getElementById('contactEmail').value = email || '';
+  document.getElementById('contactPriority').value = priority || 'Secondary';
+  document.getElementById('contactIsPrimary').checked = Boolean(isPrimary);
+  document.getElementById('emergencyContactModal').classList.remove('hidden');
+}
+
+function closeEmergencyContactModal() {
+  document.getElementById('emergencyContactModal').classList.add('hidden');
+}
+
+async function handleSaveEmergencyContact(e) {
+  e.preventDefault();
+  const id = document.getElementById('contactEditId').value;
+  const payload = {
+    name: document.getElementById('contactName').value,
+    relationship: document.getElementById('contactRelationship').value,
+    phone: document.getElementById('contactPhone').value,
+    email: document.getElementById('contactEmail').value,
+    priority: document.getElementById('contactPriority').value,
+    isPrimary: document.getElementById('contactIsPrimary').checked
+  };
+
+  const url = id ? `/emergency/contacts/${id}` : '/emergency/contacts';
+  const method = id ? 'PUT' : 'POST';
+
+  const res = await apiRequest(url, { method, body: payload });
+  if (res && res.ok) {
+    showToast(id ? 'Contact updated successfully' : 'Emergency contact added', 'success');
+    closeEmergencyContactModal();
+    loadPatientEmergencyContacts();
+  } else {
+    showToast(res?.message || 'Failed to save emergency contact', 'error');
+  }
+}
+
+async function deleteEmergencyContact(id) {
+  if (!confirm('Remove this emergency contact?')) return;
+  const res = await apiRequest(`/emergency/contacts/${id}`, { method: 'DELETE' });
+  if (res && res.ok) {
+    showToast('Contact removed', 'info');
+    loadPatientEmergencyContacts();
+  } else {
+    showToast('Failed to remove contact', 'error');
+  }
+}
+
+async function setPrimaryEmergencyContact(id) {
+  const res = await apiRequest(`/emergency/contacts/${id}/primary`, { method: 'PUT' });
+  if (res && res.ok) {
+    showToast('Primary emergency contact updated ★', 'success');
+    loadPatientEmergencyContacts();
+  } else {
+    showToast('Failed to set primary contact', 'error');
+  }
+}
+
+/**
+ * Loads emergency medical summary card
+ */
+async function loadEmergencyMedicalSummary() {
+  const container = document.getElementById('emergencyMedicalInfoContainer');
+  if (!container) return;
+
+  const res = await apiRequest(`/patients/${currentUser.id}/lifetime-history`);
+  if (!res || !res.ok) {
+    container.innerHTML = '<div style="font-size:12px; color:var(--text-muted);">Failed to load profile.</div>';
+    return;
+  }
+
+  const { patient, allergiesDetail, medicalConditionsDetail } = res.data;
+  const blood = patient?.bloodGroup || 'O+';
+  const location = patient?.roomLocation || 'Home';
+
+  container.innerHTML = `
+    <div class="grid-2" style="gap:14px; margin-bottom:14px;">
+      <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+        <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; font-weight:700;">Blood Group</div>
+        <div style="font-size:18px; font-weight:800; color:#ff4d4d; margin-top:2px;">🩸 ${blood}</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+        <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; font-weight:700;">Default Location</div>
+        <div style="font-size:14px; font-weight:700; color:var(--primary); margin-top:2px;">📍 ${location}</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px;">
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Known Allergies (High Caution):</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        ${allergiesDetail?.map(a => `
+          <span class="badge" style="background:rgba(255,71,87,0.15); color:#ff6b6b; border:1px solid rgba(255,71,87,0.3);">
+            ⚠️ ${a.name} (${a.severity})
+          </span>
+        `).join('') || '<span style="font-size:12px; color:var(--text-muted);">No critical drug allergies recorded</span>'}
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Active Medical Conditions:</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        ${medicalConditionsDetail?.map(c => `
+          <span class="badge" style="background:rgba(108,99,255,0.15); color:#a29bfe; border:1px solid rgba(108,99,255,0.3);">
+            🩺 ${c.condition}
+          </span>
+        `).join('') || '<span style="font-size:12px; color:var(--text-muted);">None listed</span>'}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Loads emergency case history
+ */
+async function loadPatientEmergencyHistory() {
+  const container = document.getElementById('patientEmergencyHistoryList');
+  if (!container) return;
+
+  const res = await apiRequest('/emergency/history');
+  if (!res || !res.ok || !res.data || !res.data.length) {
+    container.innerHTML = '<div class="empty-state" style="padding:24px 0;"><div class="empty-icon">✅</div><div class="empty-text">No past emergency incidents recorded.</div></div>';
+    return;
+  }
+
+  container.innerHTML = res.data.map(h => `
+    <div class="card" style="border-left: 3px solid ${h.status === 'CANCELLED' ? 'var(--text-muted)' : 'var(--status-normal)'}; padding:14px 18px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+        <div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <strong style="font-size:14px; color:var(--text-primary);">${h.emergencyId}</strong>
+            <span class="badge" style="background:rgba(255,255,255,0.06);">${h.emergencyType}</span>
+            <span class="badge-status-${h.status.toLowerCase().replace(/_/g, '-')}">${h.status}</span>
+          </div>
+          <div style="font-size:12px; color:var(--text-secondary); margin-top:4px;">
+            Triggered: ${formatDateTime(h.triggeredAt)} ${h.resolvedAt ? `• Resolved: ${formatDateTime(h.resolvedAt)}` : ''}
+          </div>
+          ${h.cancellationReason ? `<div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Reason: ${h.cancellationReason}</div>` : ''}
+        </div>
+        <div style="font-size:12px; color:var(--text-muted);">
+          📍 ${h.location?.address || (h.location?.isAvailable ? 'GPS Logged' : 'Unavailable')}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/**
+ * Cancel SOS modal handlers
+ */
+function openCancelSOSModal() {
+  const modal = document.getElementById('cancelSOSModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeCancelSOSModal() {
+  const modal = document.getElementById('cancelSOSModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function submitCancelSOS(e) {
+  e.preventDefault();
+  if (!activeEmergencyCaseId) {
+    showToast('No active emergency ID found', 'error');
+    return;
+  }
+
+  const reason = document.getElementById('cancelReasonSelect').value;
+  const notes = document.getElementById('cancelReasonNotes').value;
+  const combinedReason = notes ? `${reason} — ${notes}` : reason;
+
+  const res = await apiRequest(`/emergency/${activeEmergencyCaseId}/cancel`, {
+    method: 'POST',
+    body: { reason: combinedReason }
+  });
+
+  if (res && res.ok) {
+    showToast('Emergency SOS cancelled. Notified parties updated.', 'info');
+    closeCancelSOSModal();
+    activeEmergencyCaseId = null;
+    loadPatientEmergencySection();
+  } else {
+    showToast(res?.message || 'Failed to cancel SOS', 'error');
+  }
+}
+
+/**
+ * Health Warning & Fall Alert Modal Handlers (Non-Diagnostic Safety Compliance)
+ */
+function showHealthWarningModal({ type = 'POSSIBLE_HEALTH_EMERGENCY', title, message, details = '' }) {
+  const modal = document.getElementById('healthWarningModal');
+  if (!modal) return;
+
+  pendingHealthWarningType = type;
+  document.getElementById('hwModalIcon').textContent = type === 'FALL_ALERT' ? '🚨' : '⚠️';
+  document.getElementById('hwModalTitle').textContent = title || (type === 'FALL_ALERT' ? 'Possible Fall Detected' : 'Possible Health Emergency Detected');
+  document.getElementById('hwModalMessage').textContent = message || (type === 'FALL_ALERT' ? 'A hard fall event was detected. Are you okay?' : 'Unusual health readings detected. Please check how you are feeling.');
+  document.getElementById('hwModalDetails').innerHTML = details ? `<div>${details}</div>` : '';
+
+  modal.classList.remove('hidden');
+
+  healthWarningCountdown = 15;
+  const timerDisp = document.getElementById('hwCountdownSec');
+  if (timerDisp) timerDisp.textContent = healthWarningCountdown;
+
+  if (healthWarningTimer) clearInterval(healthWarningTimer);
+  healthWarningTimer = setInterval(() => {
+    healthWarningCountdown--;
+    if (timerDisp) timerDisp.textContent = Math.max(0, healthWarningCountdown);
+    if (healthWarningCountdown <= 0) {
+      clearInterval(healthWarningTimer);
+      healthWarningTimer = null;
+      confirmHealthWarningSOS();
+    }
+  }, 1000);
+}
+
+function dismissHealthWarning() {
+  if (healthWarningTimer) {
+    clearInterval(healthWarningTimer);
+    healthWarningTimer = null;
+  }
+  const modal = document.getElementById('healthWarningModal');
+  if (modal) modal.classList.add('hidden');
+  showToast('Health alert dismissed. Normal monitoring continuing.', 'success');
+}
+
+function confirmHealthWarningSOS() {
+  if (healthWarningTimer) {
+    clearInterval(healthWarningTimer);
+    healthWarningTimer = null;
+  }
+  const modal = document.getElementById('healthWarningModal');
+  if (modal) modal.classList.add('hidden');
+  executeSOSDispatch(pendingHealthWarningType);
+}
+
+// Backwards compatibility
+const triggerSOS = openSOSModal;
+
 
 function getReportEmoji(type) {
   const map = { blood_test: '🩸', ecg: '💓', xray: '🦴', mri: '🧠', urine: '🧪', ct_scan: '🔬', other: '📄' };

@@ -16,6 +16,14 @@ const UserSchema = new mongoose.Schema({
   assignedPatients: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   caregiverPhone: { type: String },
   emergencyContact: { type: String },
+  emergencyContacts: [{
+    name: { type: String, required: true },
+    relationship: { type: String, default: 'Family' },
+    phone: { type: String, required: true },
+    email: { type: String, default: '' },
+    priority: { type: String, enum: ['Primary', 'Secondary', 'Other'], default: 'Secondary' },
+    isPrimary: { type: Boolean, default: false }
+  }],
   roomLocation: { type: String, default: 'Home' },
   medicalHistory: [{ type: String }],
   allergies: [{ type: String }],

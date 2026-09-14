@@ -97,6 +97,8 @@ app.use('/api/patients', require('./routes/patients'));
 app.use('/api/vitals', require('./routes/vitals'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/medical-reports', require('./routes/medicalReports'));
+app.use('/api/lab', require('./routes/lab'));
 app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/medication', require('./routes/medication'));
 app.use('/api/pharmacy', require('./routes/pharmacy'));

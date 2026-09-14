@@ -3,153 +3,351 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CareLink — Emergency Response Portal</title>
-  <meta name="description" content="CareLink Emergency Portal: Critical alerts, hard fall event telemetry, and live ambulance dispatch." />
+  <title>CareLink — Emergency Response Command Portal</title>
+  <meta name="description" content="CareLink Emergency Response Portal: Live SOS stream, team dispatch, GPS telemetry, and incident management." />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <div class="app-layout">
+    
+    <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-logo">
         <div class="logo-icon">🚑</div>
         <div>
           <div class="logo-text">MediLink AI</div>
-          <div class="logo-subtitle">Emergency Response</div>
+          <div class="logo-subtitle">Emergency Command</div>
         </div>
       </div>
+      
       <nav class="sidebar-nav">
-        <div class="nav-section-label">Main</div>
-        <a class="nav-item active" href="#">
-          <span class="nav-icon">🚨</span> Critical Incident Stream
+        <div class="nav-section-label">Incident Command</div>
+        <a class="nav-item active" id="navActive" href="#" onclick="showSection('active', this)">
+          <span class="nav-icon">🚨</span> Active Emergencies
+          <span class="nav-badge" id="activeBadge" style="display:none">0</span>
+        </a>
+        <a class="nav-item" id="navCases" href="#" onclick="showSection('cases', this)">
+          <span class="nav-icon">📋</span> Emergency Cases
+        </a>
+        <a class="nav-item" id="navLocations" href="#" onclick="showSection('locations', this)">
+          <span class="nav-icon">🗺️</span> Emergency Locations
+        </a>
+        
+        <div class="nav-section-label">Operations</div>
+        <a class="nav-item" id="navTeams" href="#" onclick="showSection('teams', this)">
+          <span class="nav-icon">👥</span> Emergency Teams
+        </a>
+        <a class="nav-item" id="navHistory" href="#" onclick="showSection('history', this)">
+          <span class="nav-icon">📊</span> Emergency History
+        </a>
+        
+        <div class="nav-section-label">System</div>
+        <a class="nav-item" id="navNotifications" href="#" onclick="showSection('notifications', this)">
+          <span class="nav-icon">🔔</span> Notifications
+        </a>
+        <a class="nav-item" id="navSettings" href="#" onclick="showSection('settings', this)">
+          <span class="nav-icon">⚙️</span> Settings
         </a>
       </nav>
+      
       <div class="sidebar-user">
         <div class="user-avatar" id="sidebarAvatar">E</div>
         <div class="user-info">
-          <div class="user-name" id="sidebarName">ER Officer</div>
-          <div class="user-role">emergency</div>
+          <div class="user-name" id="sidebarName">ER Command Officer</div>
+          <div class="user-role" id="sidebarRole">emergency</div>
         </div>
         <button class="logout-btn" onclick="logout()" title="Logout">⏻</button>
       </div>
     </aside>
 
+    <!-- MAIN CONTENT -->
     <main class="main-content">
+      
+      <!-- TOPBAR -->
       <div class="topbar">
         <div>
-          <div class="topbar-title">🚑 Emergency & Ambulance Dispatch Control</div>
-          <div class="topbar-subtitle">Real-time wearable fall alerts & AI critical risk incident feed</div>
+          <div class="topbar-title" id="pageTitle">🚨 Active Emergencies &amp; Dispatch</div>
+          <div class="topbar-subtitle" id="pageSubtitle">Real-time emergency incident feed &amp; response coordination</div>
+        </div>
+        <div class="topbar-right">
+          <div id="currentDateTime" style="font-size:13px; color:var(--text-muted);"></div>
+          <button class="btn btn-ghost btn-sm" onclick="refreshCurrentSection()">
+            ↻ Refresh Feed
+          </button>
         </div>
       </div>
 
       <div class="page-content">
-        <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
-          <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--danger),#c0392b);">
-            <div class="stat-icon">🚨</div>
-            <div class="stat-value" id="statActiveIncidents" style="color:var(--danger)">0</div>
-            <div class="stat-label">Active Emergencies</div>
+        
+        <!-- ═══ 1. ACTIVE EMERGENCIES SECTION ═══ -->
+        <section id="section-active">
+          <!-- Real-Time Statistics Grid -->
+          <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
+            <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--danger),#c0392b);">
+              <div class="stat-icon">🔴</div>
+              <div class="stat-value" id="statActiveCount" style="color:var(--danger)">0</div>
+              <div class="stat-label">Active Emergencies</div>
+            </div>
+            <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--warning),#e17055);">
+              <div class="stat-icon">🟠</div>
+              <div class="stat-value" id="statPendingCount" style="color:var(--warning)">0</div>
+              <div class="stat-label">Pending Response</div>
+            </div>
+            <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--secondary),#a29bfe);">
+              <div class="stat-icon">🟡</div>
+              <div class="stat-value" id="statAssignedCount" style="color:var(--secondary)">0</div>
+              <div class="stat-label">Teams Assigned</div>
+            </div>
+            <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--status-normal),#00b894);">
+              <div class="stat-icon">🟢</div>
+              <div class="stat-value" id="statResolvedCount" style="color:var(--status-normal)">0</div>
+              <div class="stat-label">Resolved Today</div>
+            </div>
           </div>
-          <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--warning),#e17055);">
-            <div class="stat-icon">🚑</div>
-            <div class="stat-value" id="statAmbulanceDispatched" style="color:var(--warning)">0</div>
-            <div class="stat-label">Ambulances On Route</div>
-          </div>
-          <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--status-normal),#00b894);">
-            <div class="stat-icon">🏥</div>
-            <div class="stat-value" id="statArrivedER" style="color:var(--status-normal)">0</div>
-            <div class="stat-label">Arrived at Trauma ER</div>
-          </div>
-          <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--primary),var(--secondary));">
-            <div class="stat-icon">📍</div>
-            <div class="stat-value" style="color:var(--primary)">GPS Live</div>
-            <div class="stat-label">Location Tracking</div>
-          </div>
-        </div>
 
-        <div class="card mb-20">
-          <div class="card-header">
-            <div class="card-title">🚨 Real-time Emergency Incident Stream</div>
-            <button class="btn btn-ghost btn-sm" onclick="loadEmergencyAlerts()">↻ Refresh Incident Feed</button>
+          <!-- Active Incidents Feed -->
+          <div class="card mb-20">
+            <div class="card-header">
+              <div>
+                <div class="card-title">🚨 Real-time Emergency Incident Stream</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                  Live triage stream of manual SOS triggers, fall alerts, and critical biometric events
+                </div>
+              </div>
+              <div style="display:flex; gap:10px;">
+                <button class="btn btn-ghost btn-sm" onclick="loadActiveEmergencies()">↻ Refresh</button>
+              </div>
+            </div>
+
+            <div id="activeIncidentsList" style="display:flex; flex-direction:column; gap:14px;">
+              <div class="loading-spinner"></div>
+            </div>
           </div>
-          <div id="emergencyIncidentsList" style="display:flex; flex-direction:column; gap:14px;">
-            <div class="loading-spinner"></div>
+        </section>
+
+        <!-- ═══ 2. EMERGENCY CASES DIRECTORY ═══ -->
+        <section id="section-cases" class="hidden">
+          <div class="card mb-20">
+            <div class="card-header">
+              <div>
+                <div class="card-title">📋 Emergency Cases Master Registry</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Filter and inspect all system emergency case records</div>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+              <input type="text" id="caseSearchInput" class="form-input" placeholder="Search by Emergency ID or Patient Name..." style="max-width:320px;" oninput="filterCases()" />
+              <select id="caseStatusFilter" class="form-select" style="width:auto;" onchange="filterCases()">
+                <option value="">All Statuses</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+                <option value="TEAM_ASSIGNED">TEAM_ASSIGNED</option>
+                <option value="EN_ROUTE">EN_ROUTE</option>
+                <option value="ARRIVED">ARRIVED</option>
+                <option value="UNDER_CARE">UNDER_CARE</option>
+                <option value="RESOLVED">RESOLVED</option>
+                <option value="CANCELLED">CANCELLED</option>
+              </select>
+              <select id="casePriorityFilter" class="form-select" style="width:auto;" onchange="filterCases()">
+                <option value="">All Priorities</option>
+                <option value="Critical">Critical</option>
+                <option value="High Priority">High Priority</option>
+                <option value="Warning">Warning</option>
+                <option value="Normal">Normal</option>
+              </select>
+            </div>
+
+            <div id="allCasesList" style="display:flex; flex-direction:column; gap:12px;">
+              <div class="loading-spinner"></div>
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
+
+        <!-- ═══ 3. EMERGENCY LOCATIONS ═══ -->
+        <section id="section-locations" class="hidden">
+          <div class="card mb-20">
+            <div class="card-header">
+              <div>
+                <div class="card-title">🗺️ Emergency Geolocation &amp; Dispatch Map Telemetry</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Coordinate mapping &amp; distance calculation for active incidents</div>
+              </div>
+            </div>
+
+            <div id="locationsFeedContainer" style="display:flex; flex-direction:column; gap:16px;">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ 4. EMERGENCY TEAMS ═══ -->
+        <section id="section-teams" class="hidden">
+          <div class="card mb-20">
+            <div class="card-header">
+              <div>
+                <div class="card-title">👥 Emergency Response Teams Roster</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Rapid response vehicles, paramedics, and on-duty readiness</div>
+              </div>
+            </div>
+
+            <div id="teamsGridContainer" class="grid-2" style="gap:16px;">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ 5. EMERGENCY HISTORY ═══ -->
+        <section id="section-history" class="hidden">
+          <div class="card mb-20">
+            <div class="card-header">
+              <div>
+                <div class="card-title">📊 Emergency Incident Resolution History</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Archived incident timeline audits and resolution records</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="loadEmergencyHistory()">↻ Refresh</button>
+            </div>
+
+            <div id="historyIncidentsList" style="display:flex; flex-direction:column; gap:12px;">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ 6. NOTIFICATIONS ═══ -->
+        <section id="section-notifications" class="hidden">
+          <div class="card mb-20">
+            <div class="card-header">
+              <div class="card-title">🔔 Emergency Dispatch Notifications</div>
+              <button class="btn btn-ghost btn-sm" onclick="loadNotifications()">↻ Refresh</button>
+            </div>
+            <div id="erNotificationsList" style="display:flex; flex-direction:column; gap:12px;">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ 7. SETTINGS ═══ -->
+        <section id="section-settings" class="hidden">
+          <div class="card mb-20" style="max-width:680px;">
+            <div class="card-header">
+              <div class="card-title">⚙️ Emergency Escalation Policies</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div class="form-group">
+                <label class="form-label">Auto-Escalation Threshold</label>
+                <select class="form-select">
+                  <option value="70">AI Risk Score &gt;= 70 (Default)</option>
+                  <option value="60">AI Risk Score &gt;= 60 (Sensitive)</option>
+                  <option value="80">AI Risk Score &gt;= 80 (High Threshold)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Default Assigned Trauma Center</label>
+                <input type="text" class="form-input" value="MediLink Central Trauma &amp; Emergency Center" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Hospital Dispatch Hotline</label>
+                <input type="text" class="form-input" value="+91 98765 00108" />
+              </div>
+              <button class="btn btn-primary" onclick="showToast('Settings saved successfully', 'success')">Save Configuration</button>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /page-content -->
     </main>
   </div>
 
-  <div class="toast-container" id="toastContainer"></div>
-  <script src="js/auth.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      if (!requireAuth('emergency')) return;
-      initSidebar();
-      loadEmergencyAlerts();
-    });
+  <!-- ═══════════════════════════════════════
+       MODALS
+  ═══════════════════════════════════════ -->
 
-    async function loadEmergencyAlerts() {
-      const res = await apiRequest('/emergency/alerts');
-      const container = document.getElementById('emergencyIncidentsList');
-      if (!res || !res.ok || !res.data.length) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">No active emergency incidents detected</div></div>';
-        return;
-      }
-
-      const alerts = res.data;
-      const active = alerts.filter(a => !a.resolved).length;
-      const dispatched = alerts.filter(a => a.emergencyStatus === 'Dispatched' || a.emergencyStatus === 'On Route').length;
-      const arrived = alerts.filter(a => a.emergencyStatus === 'Arrived' || a.resolved).length;
-
-      document.getElementById('statActiveIncidents').textContent = active;
-      document.getElementById('statAmbulanceDispatched').textContent = dispatched;
-      document.getElementById('statArrivedER').textContent = arrived;
-
-      container.innerHTML = alerts.map(a => `
-        <div class="card" style="background:rgba(255,77,77,0.08); border:1.5px solid rgba(255,77,77,0.4);">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
-            <div>
-              <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
-                <span style="font-size:20px;">🚨</span>
-                <span style="font-size:16px; font-weight:800; color:#ff4d4d">${a.patientId?.name || 'Patient'}</span>
-                <span class="badge badge-critical">${a.type} ${a.fallDetected ? '(HARD FALL DETECTED)' : ''}</span>
-              </div>
-              <div style="font-size:13px; color:var(--text-primary); font-weight:600; margin-bottom:6px;">
-                📍 Location: <span style="color:var(--primary)">${a.location || a.patientId?.roomLocation || 'Room 104, Sunrise Senior Home'}</span>
-              </div>
-              <div style="font-size:13px; color:var(--text-secondary); margin-bottom:6px;">
-                ${a.message}
-              </div>
-              <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--text-muted);">
-                <div>👩‍⚕️ Caregiver: <strong>${a.patientId?.caregiverPhone || '+91 98765 88888'}</strong></div>
-                <div>👨‍👩‍👧 Family: <strong>${a.patientId?.emergencyContact || '+91 98765 99999'}</strong></div>
-                <div>🩸 Blood Group: <strong>${a.patientId?.bloodGroup || 'O+'}</strong></div>
-              </div>
-            </div>
-            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
-              <span class="badge" style="background:linear-gradient(90deg,var(--danger),#c0392b); color:#fff; font-weight:700;">Status: ${a.emergencyStatus || 'Dispatched'}</span>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button class="btn btn-warning btn-sm" onclick="updateDispatchStatus('${a._id}','On Route')">🚑 Ambulance On Route</button>
-                <button class="btn btn-primary btn-sm" onclick="updateDispatchStatus('${a._id}','Arrived')">🏥 Arrived at ER</button>
-                <button class="btn btn-ghost btn-sm" onclick="updateDispatchStatus('${a._id}','Resolved')">✅ Clear Ticket</button>
-              </div>
-            </div>
+  <!-- EMERGENCY CASE DETAIL & TIMELINE MODAL -->
+  <div id="erCaseDetailModal" class="modal-overlay hidden">
+    <div class="modal" style="width:min(800px,95vw);">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:24px;">🚨</span>
+          <div>
+            <div class="modal-title" id="erModalCaseTitle" style="color:#ff4d4d;">Emergency Incident</div>
+            <div style="font-size:12px; color:var(--text-muted);" id="erModalCaseSub">Case details, location &amp; response status</div>
           </div>
         </div>
-      `).join('');
-    }
+        <button class="modal-close" onclick="closeErCaseModal()">✕</button>
+      </div>
 
-    async function updateDispatchStatus(id, status) {
-      const res = await apiRequest(`/emergency/dispatch/${id}`, {
-        method: 'PUT',
-        body: { status }
-      });
-      if (res?.ok) {
-        showToast(`Ambulance dispatch status updated to "${status}" 🚑`, 'success');
-        loadEmergencyAlerts();
-      } else {
-        showToast('Failed to update dispatch status', 'error');
-      }
-    }
-  </script>
+      <div id="erModalCaseBody" style="max-height:70vh; overflow-y:auto; padding-right:4px;">
+        <div class="loading-spinner"></div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:16px; border-top:1px solid var(--border); padding-top:14px; flex-wrap:wrap;" id="erModalActionFooter">
+        <!-- Dynamic workflow buttons injected here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ASSIGN EMERGENCY TEAM MODAL -->
+  <div id="assignTeamModal" class="modal-overlay hidden">
+    <div class="modal" style="width:min(500px,95vw);">
+      <div class="modal-header">
+        <div class="modal-title">🚑 Assign Response Unit</div>
+        <button class="modal-close" onclick="closeAssignTeamModal()">✕</button>
+      </div>
+      <form onsubmit="handleAssignTeamSubmit(event)">
+        <input type="hidden" id="assignCaseId" value="" />
+        <div class="form-group">
+          <label class="form-label">Select Response Unit *</label>
+          <select id="teamSelect" class="form-select" required onchange="onTeamSelectChange(this.value)">
+            <option value="TEAM-ALPHA">🚑 Rapid Response Unit 01 (Trauma ALS Ambulance)</option>
+            <option value="TEAM-BRAVO">❤️ Cardiac Care Emergency Unit 02 (MICU)</option>
+            <option value="TEAM-CHARLIE">👵 Geriatric Rapid Assistance Unit 03 (BLS Ambulance)</option>
+            <option value="TEAM-DELTA">🏍️ Rapid Bike Responder Unit 04 (First Responder)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lead Paramedic / Responder</label>
+          <input type="text" id="teamLead" class="form-input" value="Capt. Rajesh Varma (Paramedic)" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contact Radio / Phone</label>
+          <input type="text" id="teamContact" class="form-input" value="+91 98765 30001" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Vehicle Type</label>
+          <input type="text" id="teamVehicle" class="form-input" value="Advanced Life Support (ALS) Ambulance" required />
+        </div>
+        <div style="display:flex; gap:10px; margin-top:16px;">
+          <button type="submit" class="btn btn-warning" style="flex:1;">Confirm &amp; Dispatch Unit</button>
+          <button type="button" class="btn btn-ghost" onclick="closeAssignTeamModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ADD CASE NOTE MODAL -->
+  <div id="addCaseNoteModal" class="modal-overlay hidden">
+    <div class="modal" style="width:min(440px,95vw);">
+      <div class="modal-header">
+        <div class="modal-title">📝 Add Dispatch / Clinical Note</div>
+        <button class="modal-close" onclick="closeCaseNoteModal()">✕</button>
+      </div>
+      <form onsubmit="handleAddCaseNoteSubmit(event)">
+        <input type="hidden" id="noteCaseId" value="" />
+        <div class="form-group">
+          <label class="form-label">Incident Note *</label>
+          <textarea id="noteText" class="form-textarea" rows="3" placeholder="Enter paramedic findings, ETA, or treatment notes..." required></textarea>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:12px;">
+          <button type="submit" class="btn btn-primary" style="flex:1;">Add to Timeline</button>
+          <button type="button" class="btn btn-ghost" onclick="closeCaseNoteModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="js/auth.js"></script>
+  <script src="js/emergency.js"></script>
 </body>
 </html>

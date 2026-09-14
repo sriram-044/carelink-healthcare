@@ -21,6 +21,7 @@ const AlertSchema = new mongoose.Schema({
   resolved: { type: Boolean, default: false },
   resolvedAt: { type: Date },
   resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  emergencyCaseId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmergencyCase' },
   createdAt: { type: Date, default: Date.now }
 });
 

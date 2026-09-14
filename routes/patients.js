@@ -37,6 +37,8 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
+const MedicalReport = require('../models/MedicalReport');
+
 // GET /api/patients/:id/lifetime-history — full lifetime medical record
 router.get('/:id/lifetime-history', auth, async (req, res) => {
   try {
@@ -50,12 +52,18 @@ router.get('/:id/lifetime-history', auth, async (req, res) => {
     const hospitalVisits = await HospitalVisit.find({ patientId: req.params.id }).sort({ visitDate: -1 });
     const medications = await Medication.find({ patientId: req.params.id }).populate('doctorId', 'name').sort({ createdAt: -1 });
     const reports = await Report.find({ patientId: req.params.id }).sort({ testDate: -1 });
+    const medicalReports = await MedicalReport.find({ patientId: req.params.id })
+      .populate('doctorId', 'name specialization')
+      .populate('testRequestId', 'requestId priority testName')
+      .populate('sampleId', 'sampleId sampleType status')
+      .sort({ testDate: -1, createdAt: -1 });
 
     res.json({
       patient,
       hospitalVisits,
       medications,
       reports,
+      medicalReports,
       allergiesDetail: patient.allergiesDetail || [],
       medicalConditionsDetail: patient.medicalConditionsDetail || []
     });
