@@ -2,7 +2,7 @@
 
 const connectDB = async () => {
   try {
-    let uri = process.env.MONGO_URI;
+    let uri = process.env.MONGO_URI || process.env.MONGODB_URI;
 
     // Auto-use in-memory MongoDB if URI is local or not a real Atlas URI
     const useInMemory = !uri || uri.includes('127.0.0.1') || uri.includes('localhost');
@@ -20,6 +20,10 @@ const connectDB = async () => {
     try {
       const conn = await mongoose.connect(uri);
       console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+      // Auto-seed if database is fresh
+      setTimeout(() => {
+        require('../utils/autoSeed').seed().catch(() => {});
+      }, 500);
     } catch (atlasErr) {
       if (!useInMemory) {
         console.warn(`⚠️ Could not connect to remote MongoDB Atlas (${atlasErr.message}).`);
@@ -36,13 +40,6 @@ const connectDB = async () => {
       } else {
         throw atlasErr;
       }
-    }
-
-    if (useInMemory) {
-      // Auto-seed after connection
-      setTimeout(() => {
-        require('../utils/autoSeed').seed().catch(() => {});
-      }, 500);
     }
   } catch (error) {
     console.error(`❌ MongoDB Connection Error: ${error.message}`);

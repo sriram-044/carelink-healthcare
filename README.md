@@ -1,6 +1,6 @@
 # CareLink / MediLink AI — Intelligent Healthcare Ecosystem & SOS Emergency System
 
-> **CareLink (MediLink AI)** is an enterprise multi-portal healthcare management ecosystem featuring real-time patient biometric monitoring, wearable sensor telemetry, clinical decision support, lifetime electronic health records (EHR), multi-category laboratory diagnostics, and a production-grade **SOS Emergency Response System**.
+> **CareLink (MediLink AI)** is an enterprise multi-portal healthcare management ecosystem featuring real-time patient biometric monitoring, wearable sensor telemetry, clinical decision support, lifetime electronic health records (EHR), multi-category laboratory diagnostics, a production-grade **SOS Emergency Response System**, and turnkey **Docker & Docker Compose containerization**.
 
 ---
 
@@ -89,9 +89,9 @@ The Laboratory Portal provides diagnostic and pathology staff with a workspace t
 ## 🗄️ 4. Database Models
 
 1. **`EmergencyCase`** (`models/EmergencyCase.js`):
-   - `emergencyId` (auto-generated `EMG-XXXX`), `patientId`, `patientName`, `emergencyType` (`MANUAL_SOS`, `FALL_ALERT`, `CRITICAL_VITALS`, `HEALTH_WARNING`, `PANIC_BUTTON`), `status` (`ACTIVE` through `RESOLVED`), `priority` (`Critical`, `High Priority`, `Warning`, `Normal`), `location` `{ latitude, longitude, accuracy, timestamp, address, isAvailable }`, `emergencyContacts` `[{ name, relationship, phone, email, priority, notified, notifiedAt }]`, `assignedDoctor`, `assignedHospital`, `assignedEmergencyTeam` `{ teamId, teamName, leadResponder, contactPhone, vehicleType, assignedAt }`, `recentHealthData`, `timeline` `[{ event, message, timestamp, performedBy, performedByName, performedByRole }]`, `alertsSent`, `notes`.
+   - `emergencyId` (auto-generated `EMG-XXXX`), `patientId`, `patientName`, `emergencyType`, `status`, `priority`, `location`, `emergencyContacts`, `assignedDoctor`, `assignedHospital`, `assignedEmergencyTeam`, `recentHealthData`, `timeline`, `alertsSent`, `notes`.
 2. **`User`** (`models/User.js`):
-   - Supports `emergencyContacts` array of subdocuments (`name`, `relationship`, `phone`, `email`, `priority`, `isPrimary`) along with legacy fields for backward compatibility.
+   - Supports `emergencyContacts` array of subdocuments (`name`, `relationship`, `phone`, `email`, `priority`, `isPrimary`).
 3. **`MedicalReport`** (`models/MedicalReport.js`):
    - `reportId`, `patientId`, `doctorId`, `hospitalName`, `labName`, `category`, `reportType`, `fileName`, `fileFormat`, `fileSize`, `reportStatus`, `criticalStatus`, `structuredResults`, `aiAnalysis`.
 4. **`TestRequest`** (`models/TestRequest.js`) & **`Sample`** (`models/Sample.js`):
@@ -132,11 +132,120 @@ The Laboratory Portal provides diagnostic and pathology staff with a workspace t
 
 ---
 
-## 🚀 6. How to Run & Demo Accounts
+## 🐳 6. Docker & Docker Compose Setup
+
+CareLink AI can be packaged and run anywhere with multi-container Docker Compose orchestration.
+
+### 🏗️ Docker Architecture
+
+```
+                    🌐 USER (Web Browser)
+                              │
+              ┌───────────────┴───────────────┐
+              │                               │
+              ▼                               ▼
+    Port 3000: Frontend             Port 5000: Backend API
+   ┌───────────────────────┐       ┌───────────────────────┐
+   │  🐳 FRONTEND (Nginx)  │       │  🐳 BACKEND (Node.js) │
+   │  ├── Web UI & Portals │──────►│  ├── Express REST API │
+   │  └── Reverse Proxy    │       │  ├── AI Health Engine │
+   └───────────────────────┘       │  └── SOS Dispatcher   │
+                                   └──────────┬────────────┘
+                                              │
+                              ┌───────────────┴───────────────┐
+                              │                               │
+                              ▼                               ▼
+                     ┌─────────────────┐             ┌─────────────────┐
+                     │  🗄️ MONGODB     │             │  📁 UPLOADS     │
+                     │    CONTAINER    │             │    VOLUME       │
+                     │  (Port 27017)   │             │  (Persistent    │
+                     └────────┬────────┘             │   Reports)      │
+                              │                      └─────────────────┘
+                              ▼
+                     ┌─────────────────┐
+                     │  💾 DATABASE    │
+                     │    VOLUME       │
+                     │  (Persistent)   │
+                     └─────────────────┘
+```
+
+### 📋 Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows / macOS / Linux) with Docker Compose support.
+
+### ⚙️ Environment Configuration
+1. Create your `.env` file from the provided `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+2. The default configuration connects directly to the containerized MongoDB service (`mongodb://mongodb:27017/carelink`) with persistent storage.
+
+---
+
+### 🚀 Docker Commands
+
+#### 1. Build & Start All Services
+```bash
+# Build images and start containers in detached mode
+docker compose up -d --build
+```
+
+#### 2. Check Container Status & Health
+```bash
+docker compose ps
+```
+
+#### 3. View Live Service Logs
+```bash
+# View all container logs
+docker compose logs -f
+
+# View only Backend API logs
+docker compose logs -f backend
+
+# View only MongoDB logs
+docker compose logs -f mongodb
+```
+
+#### 4. Stop All Services
+```bash
+# Stop containers (preserves database data & uploaded reports)
+docker compose down
+```
+
+#### 5. Stop and Remove Persistent Volumes (Clean Slate Reset)
+```bash
+# WARNING: This deletes the persistent MongoDB database and upload files
+docker compose down -v
+```
+
+#### 6. Development Mode (Live Hot-Reloading)
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+---
+
+### 🌐 Access URLs in Docker Mode
+
+| Service | URL | Container | Port |
+|---|---|---|---|
+| **Frontend Web App** | `http://localhost:3000` | `carelink-frontend` | `80 -> 3000` |
+| **Backend REST API** | `http://localhost:5000` | `carelink-backend` | `5000 -> 5000` |
+| **API Health Check** | `http://localhost:5000/api/health` | `carelink-backend` | `5000` |
+| **MongoDB Database** | `mongodb://localhost:27017/carelink` | `carelink-mongodb` | `27017` |
+
+---
+
+### 💾 Data Persistence in Docker
+- **Database (`carelink_mongodb_data`)**: Mapped to `/data/db` in the `mongodb` container. All patient records, emergency cases, biometrics, and credentials persist across container restarts.
+- **Uploaded Medical Reports (`carelink_uploads_data`)**: Mapped to `/app/uploads` in the `backend` container. All PDF, DICOM, CSV, and image reports remain safe and persistent.
+
+---
+
+## 🚀 7. Local (Non-Docker) Startup & Demo Accounts
 
 ### Prerequisites
-- Node.js v18+
-- In-memory MongoDB starts automatically (no external database configuration needed).
+- Node.js v18+ (In-memory MongoDB starts automatically if no MongoDB instance is running).
 
 ### Installation & Startup
 ```bash
@@ -149,22 +258,19 @@ npm start
 
 ### Run Automated Test Suites
 ```bash
-# Run Unit & Integration Test Suite (8 tests)
+# SOS System Integration Tests (8 tests)
 node test_emergency_system.js
 
-# Run Live HTTP API Route Test Suite (12 tests)
+# SOS Live Route API Tests (12 tests)
 node test_emergency_routes.js
 
-# Run Laboratory & EHR Integration Test Suite (9 tests)
+# Laboratory & EHR Integration Tests (9 tests)
 node test_server_routes.js
 ```
 
-### Access Portals
-Open `http://localhost:5000` in your web browser.
-
-#### Demo Credentials (Password for all: `demo123`):
-- 🚑 **Emergency Response Officer**: `emergency@demo.com` ➔ `emergency.html`
-- 👤 **Patient (Elderly Case Study)**: `ravi@demo.com` ➔ `patient.html`
+### Access Portals & Demo Accounts (Password: `demo123`)
+- 🚑 **Emergency Command Center**: `emergency@demo.com` ➔ `emergency.html`
+- 👤 **Patient (Elderly Case Study - Mr. Ravi)**: `ravi@demo.com` ➔ `patient.html`
 - 👤 **Patient (Standard)**: `patient@demo.com` ➔ `patient.html`
 - 👨‍⚕️ **Doctor**: `doctor@demo.com` ➔ `doctor.html`
 - 🏥 **Hospital / Super Admin**: `admin@demo.com` ➔ `admin.html`
@@ -174,7 +280,7 @@ Open `http://localhost:5000` in your web browser.
 
 ---
 
-## ⚖️ 7. Clinical & AI Disclaimer
+## ⚖️ 8. Clinical & AI Disclaimer
 
 > [!NOTE]
 > All AI-generated analyses, risk scores, and threshold alerts produced by MediLink AI are provided strictly for **clinical decision support and review**. The system does not generate autonomous medical diagnoses. Attending licensed physicians remain responsible for all medical evaluations, prescriptions, and patient care decisions.
