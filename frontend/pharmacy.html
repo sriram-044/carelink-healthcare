@@ -81,8 +81,9 @@
   <div class="toast-container" id="toastContainer"></div>
   <script src="js/auth.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      if (!requireAuth('pharmacy')) return;
+    document.addEventListener('DOMContentLoaded', async () => {
+      const user = await requireAuth('pharmacy');
+      if (!user) return;
       initSidebar();
       loadPharmacyPrescriptions();
     });

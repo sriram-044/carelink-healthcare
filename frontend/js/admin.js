@@ -10,9 +10,10 @@ function getFileUrl(url) {
 let currentUser = null;
 let allUsers = [];
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!requireAuth('admin')) return;
-  currentUser = getUser();
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await requireAuth('admin');
+  if (!user) return;
+  currentUser = user;
   initSidebar();
 
   setInterval(() => {

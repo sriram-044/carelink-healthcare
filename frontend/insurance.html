@@ -81,8 +81,9 @@
   <div class="toast-container" id="toastContainer"></div>
   <script src="js/auth.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      if (!requireAuth('insurance')) return;
+    document.addEventListener('DOMContentLoaded', async () => {
+      const user = await requireAuth('insurance');
+      if (!user) return;
       initSidebar();
       loadInsuranceClaims();
     });

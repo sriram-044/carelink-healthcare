@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 // Step 2: Google redirects back here after auth
+// SECURITY: JWT is set as an httpOnly cookie and NEVER placed in the URL.
 router.get('/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: '/?error=google_failed' }),
   (req, res) => {
@@ -17,16 +18,11 @@ router.get('/google/callback',
       { expiresIn: '7d' }
     );
 
-    // Redirect to frontend with token and user info in URL
-    const userInfo = encodeURIComponent(JSON.stringify({
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      avatar: user.avatar
-    }));
+    // Set the JWT in a secure httpOnly cookie — never exposed in the URL
+    res.app.locals.setAuthCookie(res, token);
 
-    res.redirect(`/auth-success.html?token=${token}&user=${userInfo}`);
+    // Redirect to auth-success page WITHOUT any token or user data in the URL
+    res.redirect('/auth-success.html');
   }
 );
 

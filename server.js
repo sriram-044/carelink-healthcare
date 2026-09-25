@@ -7,10 +7,27 @@ const session = require('express-session');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('mongo-sanitize');
+const cookieParser = require('cookie-parser');
 const passport = require('./config/passport');
 const connectDB = require('./config/db');
 
 const app = express();
+
+// ─── Auth Cookie Helper (shared with routes via app.locals) ──────────────────
+// Routes call: res.app.locals.setAuthCookie(res, token)
+const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+app.locals.setAuthCookie = (res, token) => {
+  res.cookie('carelink_auth', token, {
+    httpOnly: true,                                        // JS cannot read this cookie
+    secure: process.env.NODE_ENV === 'production',        // HTTPS only in production
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    maxAge: COOKIE_MAX_AGE,
+    path: '/'
+  });
+};
+app.locals.clearAuthCookie = (res) => {
+  res.clearCookie('carelink_auth', { httpOnly: true, path: '/' });
+};
 
 // Connect to MongoDB
 connectDB();
@@ -37,9 +54,10 @@ app.use(cors({
   credentials: true
 }));
 
-// ─── Body Parsers ──────────────────────────────────────────────────────────
+// ─── Body Parsers & Cookie Parser ─────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());  // Required to read httpOnly auth cookie
 app.use(morgan('dev'));
 
 // ─── NoSQL Injection Sanitization ─────────────────────────────────────────

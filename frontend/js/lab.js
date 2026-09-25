@@ -53,7 +53,8 @@ const TEST_TEMPLATES = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!requireAuth('lab')) return;
+  const user = await requireAuth('lab');
+  if (!user) return;
   initSidebar();
 
   setInterval(() => {

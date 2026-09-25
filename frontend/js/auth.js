@@ -1,44 +1,123 @@
-// auth.js — shared auth utilities
+/**
+ * auth.js — CareLink Shared Authentication Utilities (v2 — Cookie-Based)
+ *
+ * SECURITY MODEL:
+ * - JWT is stored in an httpOnly cookie, set by the backend.
+ * - JavaScript NEVER has access to the JWT.
+ * - All API requests use credentials: 'include' so the browser automatically
+ *   sends the httpOnly cookie with every request.
+ * - User profile is cached in memory (currentUserCache) per page load.
+ *   It is NOT persisted to localStorage or sessionStorage.
+ * - Role is always authoritative from the backend (/api/auth/me).
+ */
 
-// Auto-detect production vs development
 const IS_PROD = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 const BACKEND_URL = IS_PROD ? 'https://carelink-api-3vzd.onrender.com' : '';
 const API_BASE = `${BACKEND_URL}/api`;
 
-function getToken() {
-  return localStorage.getItem('carelink_token');
+// In-memory user cache for current page session only (not persisted to storage)
+let _currentUserCache = null;
+
+/**
+ * Fetch the current authenticated user from the backend.
+ * Returns the user object or null if not authenticated.
+ * Result is cached for the duration of the page session.
+ */
+async function fetchCurrentUser() {
+  if (_currentUserCache) return _currentUserCache;
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      method: 'GET',
+      credentials: 'include',  // Sends the httpOnly cookie automatically
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.authenticated && data.user) {
+      _currentUserCache = data.user;
+      return _currentUserCache;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
+/**
+ * Synchronous getter for cached user. Returns null if not yet fetched.
+ * Use fetchCurrentUser() to load, then getUser() after.
+ */
 function getUser() {
-  return JSON.parse(localStorage.getItem('carelink_user') || 'null');
+  return _currentUserCache;
 }
 
-function requireAuth(expectedRole) {
-  const token = getToken();
-  const user = getUser();
-  if (!token || !user) {
+/**
+ * Require authentication and optionally enforce a specific role (or roles).
+ * This is an ASYNC guard — must be awaited.
+ * Redirects to login if not authenticated or wrong role.
+ *
+ * @param {...string} allowedRoles  Zero or more role strings. Empty = any authenticated user.
+ * @returns {Object|false}          User object on success, false on redirect.
+ */
+async function requireAuth(...allowedRoles) {
+  const user = await fetchCurrentUser();
+  if (!user) {
     window.location.href = IS_PROD ? 'https://carelink-health.netlify.app/index.html' : '/index.html';
     return false;
   }
-  if (expectedRole && user.role !== expectedRole) {
-    window.location.href = IS_PROD ? 'https://carelink-health.netlify.app/index.html' : '/index.html';
+  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    // User is authenticated but wrong role — redirect to their correct portal
+    redirectToPortal(user.role);
     return false;
   }
-  return true;
+  return user;
 }
 
-function logout() {
-  localStorage.removeItem('carelink_token');
-  localStorage.removeItem('carelink_user');
+/**
+ * Redirect user to their appropriate portal based on role.
+ */
+function redirectToPortal(role) {
+  const portals = {
+    patient:   'patient.html',
+    doctor:    'doctor.html',
+    admin:     'admin.html',
+    lab:       'lab.html',
+    pharmacy:  'pharmacy.html',
+    insurance: 'insurance.html',
+    emergency: 'emergency.html',
+    hospital:  'admin.html'
+  };
+  const base = IS_PROD ? 'https://carelink-health.netlify.app/' : '/';
+  window.location.href = `${base}${portals[role] || 'index.html'}`;
+}
+
+/**
+ * Logout: calls the backend to clear the httpOnly cookie server-side,
+ * then clears the in-memory cache and redirects to login.
+ */
+async function logout() {
+  _currentUserCache = null;
+  try {
+    await fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+  } catch {
+    // Even if the request fails, clear local state and redirect
+  }
   window.location.href = IS_PROD ? 'https://carelink-health.netlify.app/index.html' : '/index.html';
 }
 
+/**
+ * Central API request helper.
+ * Always uses credentials: 'include' so the httpOnly cookie is sent automatically.
+ * No manual Authorization header needed — the cookie handles auth.
+ */
 async function apiRequest(endpoint, options = {}) {
-  const token = getToken();
   const defaultOptions = {
+    credentials: 'include',  // Send httpOnly cookie automatically
     headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      'Content-Type': 'application/json'
     }
   };
 
@@ -53,10 +132,11 @@ async function apiRequest(endpoint, options = {}) {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...defaultOptions,
     ...options,
-    headers: { ...defaultOptions.headers, ...options.headers }
+    headers: { ...defaultOptions.headers, ...(options.headers || {}) }
   });
 
   if (response.status === 401) {
+    _currentUserCache = null;
     logout();
     return null;
   }
@@ -64,6 +144,8 @@ async function apiRequest(endpoint, options = {}) {
   const data = await response.json();
   return { ok: response.ok, status: response.status, data };
 }
+
+// ─── UI Utilities ─────────────────────────────────────────────────────────
 
 function showToast(message, type = 'info') {
   let container = document.getElementById('toastContainer');

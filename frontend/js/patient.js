@@ -3,9 +3,10 @@
 let currentUser = null;
 let trendChartInstance = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!requireAuth('patient')) return;
-  currentUser = getUser();
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await requireAuth('patient');
+  if (!user) return;
+  currentUser = user;
   initSidebar();
 
   // Clock

@@ -370,16 +370,6 @@
       btn.classList.add('selected');
     }
 
-    function redirectRolePortal(role) {
-      if (role === 'patient') window.location.href = 'patient.html';
-      else if (role === 'doctor') window.location.href = 'doctor.html';
-      else if (role === 'lab') window.location.href = 'lab.html';
-      else if (role === 'pharmacy') window.location.href = 'pharmacy.html';
-      else if (role === 'insurance') window.location.href = 'insurance.html';
-      else if (role === 'emergency') window.location.href = 'emergency.html';
-      else window.location.href = 'admin.html';
-    }
-
     async function handleLogin(e) {
       e.preventDefault();
       const btn = document.getElementById('loginBtn');
@@ -393,6 +383,7 @@
       try {
         const res = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
+          credentials: 'include',  // Receive the httpOnly cookie from the backend
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
@@ -400,27 +391,25 @@
 
         if (!res.ok) {
           showToast(data.message || 'Login failed', 'error');
-          btnText.textContent = 'Sign In';
+          btnText.textContent = 'Sign In to Portal';
           btn.disabled = false;
           return;
         }
 
-        localStorage.setItem('carelink_token', data.token);
-        localStorage.setItem('carelink_user', JSON.stringify(data.user));
+        // JWT is now in an httpOnly cookie — we never store it in JavaScript.
+        const user = data.user;
+        const actualRole = user.role;
 
-        const actualRole = data.user.role;
         if (selectedRole && actualRole !== selectedRole) {
           showToast(`⚠️ Your account is a "${actualRole}" — redirecting to the correct portal.`, 'warning');
         } else {
-          showToast('Welcome back, ' + data.user.name + '!', 'success');
+          showToast('Welcome back, ' + user.name + '!', 'success');
         }
 
-        setTimeout(() => {
-          redirectRolePortal(actualRole);
-        }, 1200);
+        setTimeout(() => redirectToPortal(actualRole), 1200);
       } catch (err) {
         showToast('Connection error. Is the server running?', 'error');
-        btnText.textContent = 'Sign In';
+        btnText.textContent = 'Sign In to Portal';
         btn.disabled = false;
       }
     }
@@ -435,15 +424,14 @@
       setTimeout(() => toast.remove(), 4000);
     }
 
-    // If already logged in, redirect
-    const existingUser = JSON.parse(localStorage.getItem('carelink_user') || 'null');
-    if (existingUser && localStorage.getItem('carelink_token')) {
-      const role = existingUser.role;
-      if (role === 'patient') window.location.href = 'patient.html';
-      else if (role === 'doctor') window.location.href = 'doctor.html';
-      else if (role === 'admin') window.location.href = 'admin.html';
-      else if (role === 'lab') window.location.href = 'lab.html';
-    }
+    // If already authenticated (cookie present), redirect to appropriate portal
+    (async () => {
+      const user = await fetchCurrentUser();
+      if (user) {
+        redirectToPortal(user.role);
+      }
+    })();
   </script>
 </body>
 </html>
+

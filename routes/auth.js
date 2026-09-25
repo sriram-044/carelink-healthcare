@@ -38,13 +38,16 @@ router.post('/register', registerValidation, async (req, res) => {
     await user.save();
 
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    // Set secure httpOnly cookie — JWT is never returned to JavaScript
+    res.app.locals.setAuthCookie(res, token);
+
     res.status(201).json({
       message: 'Registration successful',
-      token,
       user: { id: user._id, name: user.name, email: user.email, role: user.role }
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Registration failed. Please try again.' });
   }
 });
 
@@ -72,9 +75,12 @@ router.post('/login', loginValidation, async (req, res) => {
     await user.save();
 
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    // Set secure httpOnly cookie — JWT is never returned to JavaScript
+    res.app.locals.setAuthCookie(res, token);
+
     res.json({
       message: 'Login successful',
-      token,
       user: {
         id: user._id,
         name: user.name,
@@ -84,14 +90,41 @@ router.post('/login', loginValidation, async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Login failed. Please try again.' });
   }
 });
 
 // ─── GET /api/auth/me ──────────────────────────────────────────────────────
-router.get('/me', require('../middleware/auth'), async (req, res) => {
-  res.json(req.user);
+// Returns authenticated user's safe profile. Never returns a JWT.
+// The browser sends the httpOnly cookie automatically when credentials: 'include' is used.
+router.get('/me', require('../middleware/auth'), (req, res) => {
+  const u = req.user;
+  res.json({
+    authenticated: true,
+    user: {
+      id: u._id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      avatar: u.avatar || null,
+      assignedDoctor: u.assignedDoctor || null,
+      specialization: u.specialization || null,
+      department: u.department || null,
+      phone: u.phone || null,
+      age: u.age || null,
+      gender: u.gender || null,
+      bloodGroup: u.bloodGroup || null,
+      isActive: u.isActive,
+      lastLogin: u.lastLogin || null
+    }
+  });
+});
+
+// ─── POST /api/auth/logout ─────────────────────────────────────────────────
+// Clears the authentication cookie server-side. Client-side state must also be cleared.
+router.post('/logout', (_req, res) => {
+  res.app.locals.clearAuthCookie(res);
+  res.json({ message: 'Logged out successfully' });
 });
 
 module.exports = router;
-

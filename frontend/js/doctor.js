@@ -13,9 +13,10 @@ let selectedPatientId = null;
 let currentReportId = null;
 let hrChart, spo2Chart, tempChart, aiTrendChart;
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!requireAuth('doctor')) return;
-  currentUser = getUser();
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await requireAuth('doctor');
+  if (!user) return;
+  currentUser = user;
   initSidebar();
 
   setInterval(() => {

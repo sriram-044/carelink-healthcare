@@ -6,8 +6,9 @@ let allEmergencyTeams = [];
 let activeIncidentStream = [];
 let viewingCaseId = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!requireAuth('emergency', 'admin', 'hospital', 'doctor')) return;
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await requireAuth('emergency', 'admin', 'hospital', 'doctor');
+  if (!user) return;
   initSidebar();
 
   // Live Clock
